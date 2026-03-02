@@ -26,6 +26,7 @@ import {
     Permute as PermuteFn,
     View as ViewFn,
     Contiguous as ContiguousFn,
+    MatMul as MatMulFn,
 } from './tensor_functions.js';
 import { backPropagateTensor } from './autodiff.js';
 
@@ -228,6 +229,10 @@ export class Tensor {
 
     rmul(other: number | Tensor): Tensor {
         return this.mul(other);
+    }
+
+    matmul(other: Tensor): Tensor {
+        return Tensor.apply(MatMulFn, this, other);
     }
 
     sum(dim?: number): Tensor {

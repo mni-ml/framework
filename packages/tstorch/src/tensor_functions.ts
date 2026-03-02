@@ -11,7 +11,7 @@ import {
 import { fastTensorMap as tensorMap, fastTensorZip as tensorZip, fastTensorReduce as tensorReduce } from './fast_ops.js';
 import * as operators from './operators.js'
 import { Tensor } from './tensor.js';
-
+import { tensorMatrixMultiply } from './tensor_ops.js';
 
 
 function zeros(shape: Shape): TensorData {
@@ -403,5 +403,76 @@ export class Contiguous extends TensorFunction {
     }
     static backward(ctx: TensorContext, gradOutput: Tensor): Tensor[] {
         return [gradOutput];
+    }
+}
+
+function transposeLast2(x: Tensor): Tensor {
+    // swap the last two dimension and the batch dimensions stay the same
+    const d = x.dims;
+    if (d < 2) {
+        throw new Error("transposeLast2 needs at least 2 dims");
+    }
+
+    const order: number[] = [...Array(d).keys()];
+    const tmp = order[d - 2];
+    order[d - 2] = order[d - 1]!;
+    order[d - 1] = tmp!;
+    return x.permute(...order);
+}
+
+function reduceToShape(grad: Tensor, targetShape: Shape): Tensor {
+    let result = grad;
+
+    while (result.dims > targetShape.length) {
+        result = result.sum(0);
+    }
+
+    for (let i = 0; i < targetShape.length; i++) {
+        if (targetShape[i] === 1 && result.shape[i] !== 1) {
+            result = result.sum(i).view(
+                ...result.shape.slice(0, i),
+                1,
+                ...result.shape.slice(i + 1)
+            );
+        }
+    }
+
+    return result;
+}
+
+export class MatMul extends TensorFunction {
+  static forward(ctx: TensorContext, a: Tensor, b: Tensor): Tensor {
+    // Save inputs for backward
+    ctx.saveForBackward(a, b);
+    return tensorMatrixMultiply(a, b);
+  }
+
+  static backward(ctx: TensorContext, gradOut: Tensor): Tensor[] {
+    const saved = ctx.savedTensors;
+    if (!saved || saved.length !== 2) {
+        throw new Error("MatMul backward: saved tensors missing");
+    }
+
+    const a = saved[0]!;
+    const b = saved[1]!;
+
+    const bT = transposeLast2(b);
+    const aT = transposeLast2(a);
+
+    const gradA = tensorMatrixMultiply(gradOut, bT);
+    const gradB = tensorMatrixMultiply(aT, gradOut);
+
+    // detach
+    gradA.history = null;
+    gradB.history = null;
+
+    const gradAFinal = reduceToShape(gradA, a.shape);
+    const gradBFinal = reduceToShape(gradB, b.shape);
+
+    // detach again after reduction
+    gradAFinal.history = null;
+    gradBFinal.history = null;
+
+    return [gradAFinal, gradBFinal];
     }
 }
