@@ -169,7 +169,6 @@ export function tensorMatrixMultiply(A: Tensor, B: Tensor): Tensor {
     }
     // If both A and B had to be converted from 2D -> 3D, then we must remove a dimension at the end. Else it will simply just disappear as per mat mult
     const both2D: boolean = Ais2D && Bis2D;
-    
 
     // Get resulting dimensions as array
     const outShape = [...shapeBroadcast(a.shape.slice(0, -2), b.shape.slice(0, -2))];
@@ -181,17 +180,17 @@ export function tensorMatrixMultiply(A: Tensor, B: Tensor): Tensor {
     }
     let out = Tensor.zeros(outShape);
 
-    // Compute inner (dot) product
-    // Unoptimized
-    for (let m = 0; m < M; ++m) {
-        for (let n = 0; n < N; ++n) {
-            let acc = 0;
+    const size = shapeProduct(outShape);
 
-            for (let k = 0; k < K; ++k) {
-                acc += a.get([m * K, k]) * b.get([k * N, n]);
-            }
-            out.set([m * M, n], acc);
-        }
+    const outIndex: number[] = new Array(outShape.length).fill(0);
+    const aIndex: number[] = new Array(a.shape.length).fill(0);
+    const bIndex: number[] = new Array(b.shape.length).fill(0);
+
+    for (let ordinal = 0; ordinal < size; ordinal++) {
+        toIndex(ordinal, outShape, outIndex);
+        
+        broadcastIndex(outIndex, outShape, a.shape, aIndex);
+        broadcastIndex(outIndex, outShape, b.shape, bIndex);
     }
 
     // Revert extra 3rd dimension
