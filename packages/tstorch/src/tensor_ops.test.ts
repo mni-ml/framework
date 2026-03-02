@@ -791,55 +791,55 @@ describe("tensorMatrixMultiply backward", () => {
     test("backward 2D x 2D", () => {
         const a = Tensor.rand([3, 4]);
         const b = Tensor.rand([4, 5]);
-        tensorGradCheck((x, y) => tensorMatrixMultiply(x, y), a, b);
+        tensorGradCheck((x, y) => x.matmul(y), a, b);
     });
 
     test("backward square matrices", () => {
         const a = Tensor.rand([4, 4]);
         const b = Tensor.rand([4, 4]);
-        tensorGradCheck((x, y) => tensorMatrixMultiply(x, y), a, b);
+        tensorGradCheck((x, y) => x.matmul(y), a, b);
     });
 
     test("backward 3D batched", () => {
         const a = Tensor.rand([2, 3, 4]);
         const b = Tensor.rand([2, 4, 5]);
-        tensorGradCheck((x, y) => tensorMatrixMultiply(x, y), a, b);
+        tensorGradCheck((x, y) => x.matmul(y), a, b);
     });
 
     test("backward with batch broadcast", () => {
         const a = Tensor.rand([1, 3, 4]);
         const b = Tensor.rand([2, 4, 5]);
-        tensorGradCheck((x, y) => tensorMatrixMultiply(x, y), a, b);
+        tensorGradCheck((x, y) => x.matmul(y), a, b);
     });
 
     test("backward 2D x 3D", () => {
         const a = Tensor.rand([3, 4]);
         const b = Tensor.rand([2, 4, 5]);
-        tensorGradCheck((x, y) => tensorMatrixMultiply(x, y), a, b);
+        tensorGradCheck((x, y) => x.matmul(y), a, b);
     });
 
     test("backward 3D x 2D", () => {
         const a = Tensor.rand([2, 3, 4]);
         const b = Tensor.rand([4, 5]);
-        tensorGradCheck((x, y) => tensorMatrixMultiply(x, y), a, b);
+        tensorGradCheck((x, y) => x.matmul(y), a, b);
     });
 
     test("backward chained: (A @ B).sum()", () => {
         const a = Tensor.rand([3, 4]);
         const b = Tensor.rand([4, 2]);
-        tensorGradCheck((x, y) => tensorMatrixMultiply(x, y).sum(), a, b);
+        tensorGradCheck((x, y) => x.matmul(y).sum(), a, b);
     });
 
     test("backward composite: sigmoid(A @ B)", () => {
         const a = Tensor.rand([2, 3]);
         const b = Tensor.rand([3, 2]);
-        tensorGradCheck((x, y) => tensorMatrixMultiply(x, y).sigmoid(), a, b);
+        tensorGradCheck((x, y) => x.matmul(y).sigmoid(), a, b);
     });
 
     test("backward chained matmuls: (A @ B) @ C", () => {
         const a = Tensor.rand([2, 3]);
         const b = Tensor.rand([3, 4]);
         const c = Tensor.rand([4, 2]);
-        tensorGradCheck((x, y) => tensorMatrixMultiply(tensorMatrixMultiply(x, y), c), a, b);
+        tensorGradCheck((x, y) => x.matmul(y).matmul(c), a, b);
     });
 });

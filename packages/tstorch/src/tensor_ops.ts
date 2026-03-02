@@ -191,6 +191,20 @@ export function tensorMatrixMultiply(A: Tensor, B: Tensor): Tensor {
         
         broadcastIndex(outIndex, outShape, a.shape, aIndex);
         broadcastIndex(outIndex, outShape, b.shape, bIndex);
+
+        const m = outIndex[outShape.length - 2];
+        const n = outIndex[outShape.length - 1];
+
+        let acc = 0;
+
+        for (let k = 0; k < K; k++) {
+            aIndex[aIndex.length - 1] = k;      // K dim in A
+            bIndex[bIndex.length - 2] = k;      // K dim in B
+
+            acc += a.get(aIndex) * b.get(bIndex);
+        }
+
+        out.set(outIndex, acc);
     }
 
     // Revert extra 3rd dimension
