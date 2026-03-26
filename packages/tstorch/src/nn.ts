@@ -1,7 +1,8 @@
 import "./operators.js"
 import { Context } from "./autodiff.js"
-import "./fast_ops.js"
+import { fastTensorReduce } from "./fast_ops.js"
 import { Tensor } from "./tensor.js"
+import { TensorData } from "./tensor_data.js"
 import "./tensor_functions.js"
 
 // # List of functions in this file:
@@ -15,14 +16,19 @@ import "./tensor_functions.js"
 // # - dropout: Dropout positions based on random noise, include an argument to turn off
 
 export function tile(input: Tensor, kernel: [number, number]): [Tensor, number, number] {
-    const {batch, channel, height, width} = input.shape;
-    const {kh, kw} = kernel;
+    const [batch, channel, height, width] = input.shape;
+    const [kh, kw] = kernel;
 
-    if (height % kh != 0) {
-        console.error("input height != kernel height");
+    if (!batch) throw new Error("input width undefined");
+    if (!channel) throw new Error("input width undefined");
+    if (!height) throw new Error("input height undefined");
+    if (!width) throw new Error("input width undefined");
+
+    if (height % kh !== 0) {
+        throw new Error("input height must be divisible by kernel height");
     }
-    if (width % kw != 0) {
-        console.error("input width != kernel width");
+    if (width % kw !== 0) {
+        throw new Error("input width must be divisible by kernel width");
     }
     const newHeight = height / kh;
     const newWidth = width / kh;
