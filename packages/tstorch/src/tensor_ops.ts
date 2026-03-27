@@ -295,3 +295,99 @@ export function tensorConv1d(
 
     return out;
 }
+
+/**
+ * Low-level 2D convolution kernel operating on raw Storage/Shape/Strides.
+ *
+ * Input shape:  [batch, in_channels, height, width]
+ * Weight shape: [out_channels, in_channels, kH, kW]
+ * Output shape: [batch, out_channels, out_height, out_width]  (caller pre-allocates)
+ *
+ * When reverse=false: output[b,oc,h,w] = sum_{ic,kh,kw} input[b,ic,h+kh,w+kw] * weight[oc,ic,kh,kw]
+ * When reverse=true:  output[b,oc,h,w] = sum_{ic,kh,kw} input[b,ic,h-kh,w-kw] * weight[oc,ic,kh,kw]
+ *
+ * Out-of-bounds input positions are treated as 0.
+ */
+export function _tensorConv2d(
+    outStorage: Storage, outShape: Shape, outStrides: Strides,
+    inputStorage: Storage, inputShape: Shape, inputStrides: Strides,
+    weightStorage: Storage, weightShape: Shape, weightStrides: Strides,
+    reverse: boolean,
+): void {
+    const outSize = shapeProduct(outShape);
+    const inChannels = inputShape[1]!;
+    const height = inputShape[2]!;
+    const width = inputShape[3]!;
+    const kH = weightShape[2]!;
+    const kW = weightShape[3]!;
+
+    const outIndex = [0, 0, 0, 0];
+    const inputIndex = [0, 0, 0, 0];
+    const weightIndex = [0, 0, 0, 0];
+
+    for (let ordinal = 0; ordinal < outSize; ordinal++) {
+        toIndex(ordinal, outShape, outIndex);
+        const b = outIndex[0]!;
+        const oc = outIndex[1]!;
+        const h = outIndex[2]!;
+        const w = outIndex[3]!;
+
+        let val = 0;
+        for (let ic = 0; ic < inChannels; ic++) {
+            for (let kh = 0; kh < kH; kh++) {
+                const sh = reverse ? h - kh : h + kh;
+                if (sh < 0 || sh >= height) continue;
+                for (let kw = 0; kw < kW; kw++) {
+                    const sw = reverse ? w - kw : w + kw;
+                    if (sw >= 0 && sw < width) {
+                        inputIndex[0] = b;
+                        inputIndex[1] = ic;
+                        inputIndex[2] = sh;
+                        inputIndex[3] = sw;
+                        weightIndex[0] = oc;
+                        weightIndex[1] = ic;
+                        weightIndex[2] = kh;
+                        weightIndex[3] = kw;
+                        val += inputStorage[indexToPosition(inputIndex, inputStrides)]!
+                             * weightStorage[indexToPosition(weightIndex, weightStrides)]!;
+                    }
+                }
+            }
+        }
+
+        outStorage[indexToPosition(outIndex, outStrides)] = val;
+    }
+}
+
+/**
+ * 2D convolution: input [batch, in_channels, height, width] x weight [out_channels, in_channels, kH, kW]
+ * -> output [batch, out_channels, height, width].
+ */
+export function tensorConv2d(
+    input: Tensor, weight: Tensor, reverse: boolean = false,
+): Tensor {
+    const batch = input.shape[0]!;
+    const inChannels = input.shape[1]!;
+    const height = input.shape[2]!;
+    const width = input.shape[3]!;
+    const outChannels = weight.shape[0]!;
+    const weightInChannels = weight.shape[1]!;
+
+    if (inChannels !== weightInChannels) {
+        throw new Error(
+            `Conv2d channel mismatch: input has ${inChannels} channels but weight expects ${weightInChannels}`,
+        );
+    }
+
+    const outShape: Shape = [batch, outChannels, height, width];
+    const out = Tensor.zeros(outShape);
+
+    _tensorConv2d(
+        out.data.storage, out.data.shape, out.data.strides,
+        input.data.storage, input.data.shape, input.data.strides,
+        weight.data.storage, weight.data.shape, weight.data.strides,
+        reverse,
+    );
+
+    return out;
+}
