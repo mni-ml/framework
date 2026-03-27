@@ -45,17 +45,30 @@ export function tile(input: Tensor, kernel: [number, number]): [Tensor, number, 
 
 
 export function avgpool2d(input: Tensor, kernel: [number, number]): Tensor {
-    const [tiled, height, width]: [Tensor, number, number] = tile(input, kernel);
+    const [tiled, newHeight, newWidth]: [Tensor, number, number] = tile(input, kernel);
     const [kh, kw] = kernel;
 
-    const inputData = new TensorData(tiled.data.storage, tiled.shape);
-    const outputData = TensorData.zeros(tiled.shape);
+    // [batch, channel, new height, kh, new width, kw] -> [batch, channel, new height, new width, kh, kw]
+    // note the swapping of index 3 & 4
+    const perm = tiled.permute(0, 1, 2, 4, 3, 5);
 
-    // reduce over the second dimension
-    const fnAvg = (acc: number) => acc / (kh * kw);
-    const reduceFn = fastTensorReduce(fnAvg);
+    const [batch, channel] = perm.shape as [number, number, number, number, number, number];
 
-    reduceFn(outputData.storage, outputData.shape, outputData.strides, inputData.storage, inputData.shape, inputData.strides, 1);
+    const inputData = new TensorData(perm.data.storage, perm.shape);
+    const outputData = TensorData.zeros(perm.shape);
 
-    return new Tensor(outputData);
+    const acc = (acc: number, x: number) => (acc + x);
+    const reduceFn = fastTensorReduce((acc: number, x: number) => acc + x);
+
+    // for 2d convolution pooling, we reduce over both cols and rows
+
+    // sum over kw. note the replacement of kw with 1. also note that 5 is dimension index
+    const sumKw = TensorData.zeros([batch, channel, newHeight, newWidth, kh, 1])
+    reduceFn(sumKw.storage, sumKw.shape, sumKw.strides, inputData.storage, inputData.shape, inputData.strides, 5);
+
+    // sum over kh
+    const sumKh = TensorData.zeros([batch, channel, newHeight, newWidth, 1, 1])
+    reduceFn(sumKh.storage, sumKh.shape, sumKh.strides, inputData.storage, inputData.shape, inputData.strides, 4);
+
+    // return new Tensor(sumKh.data.storage);
 }
