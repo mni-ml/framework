@@ -83,7 +83,7 @@ export function avgpool2d(input: Tensor, kernel: [number, number]): Tensor {
     return new Tensor(outputData);
 }
 
-export function max(input: Tensor, kernel: [number, number]): Tensor {
+export function maxpool2d(input: Tensor, kernel: [number, number]): Tensor {
     const [tiled, newHeight, newWidth]: [Tensor, number, number] = tile(input, kernel);
     const [kh, kw] = kernel;
 
@@ -98,26 +98,14 @@ export function max(input: Tensor, kernel: [number, number]): Tensor {
     const fn = (max: number, x: number) => Math.max(max, x);
     const reduceFn = fastTensorReduce(fn);
 
-    // sum over kw. note the replacement of kw with 1. also note that 5 is dimension index
-    const sumKw = TensorData.zeros([batch, channel, newHeight, newWidth, kh, 1])
-    reduceFn(sumKw.storage, sumKw.shape, sumKw.strides, inputData.storage, inputData.shape, inputData.strides, 5);
+    const t1 = TensorData.zeros([batch, channel, newHeight, newWidth, kh, 1])
+    reduceFn(t1.storage, t1.shape, t1.strides, inputData.storage, inputData.shape, inputData.strides, 5);    
 
-    // sum over kh. note we use sumKw instead of inputData now.
-    const sumKh = TensorData.zeros([batch, channel, newHeight, newWidth, 1, 1])
-    reduceFn(sumKh.storage, sumKh.shape, sumKh.strides, sumKw.storage, sumKw.shape, sumKw.strides, 4);    
-
-    if (!sumKh.storage) {
-        throw new Error("sumKh.storage is undefined");
-    }
-
-    // compute average
-    const SCALE = kh * kw;
-    for (let i = 0; i < sumKh.storage.length; ++i) {
-        sumKh.storage[i]! /= SCALE;
-    }
+    const t2 = TensorData.zeros([batch, channel, newHeight, newWidth, 1, 1])
+    reduceFn(t2.storage, t2.shape, t2.strides, t1.storage, t1.shape, t1.strides, 4);    
 
     // now shape is: (batch, channel, newHeight, newWidth)
-    const outputData = new TensorData(sumKh.storage, [batch, channel, newHeight, newWidth]);
+    const outputData = new TensorData(t2.storage, [batch, channel, 1, 1]);
 
     return new Tensor(outputData);
 } 
