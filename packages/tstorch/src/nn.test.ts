@@ -1,5 +1,5 @@
 import { describe, test, expect } from '@jest/globals';
-import { avgpool2d } from './nn';
+import { avgpool2d, maxpool2d } from './nn';
 import { Tensor } from './tensor';
 
 // Helper function to assert close values
@@ -22,20 +22,20 @@ describe('avgpool2d', () => {
   });
 });
 
-// describe('maxpool2d', () => {
-//   test('should compute max pooling correctly', () => {
-//     const t = Tensor.fromArray([[[[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]]]]);
+describe('maxpool2d', () => {
+  test('should compute max pooling correctly', () => {
+    const t = Tensor.tensor([[[[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]]]]);
 
-//     let out = maxpool2d(t, [2, 2]);
-//     assertClose(out.get(0, 0, 0, 0), Math.max(1, 2, 5, 6));
+    let out = maxpool2d(t, [2, 2]);
+    assertClose(out.get([0, 0, 0, 0]), Math.max(1, 2, 5, 6));
 
-//     out = maxpool2d(t, [2, 1]);
-//     assertClose(out.get(0, 0, 0, 0), Math.max(1, 5));
+    out = maxpool2d(t, [2, 1]);
+    assertClose(out.get([0, 0, 0, 0]), Math.max(1, 5));
 
-//     out = maxpool2d(t, [1, 2]);
-//     assertClose(out.get(0, 0, 0, 0), Math.max(1, 2));
-//   });
-// });
+    out = maxpool2d(t, [1, 2]);
+    assertClose(out.get([0, 0, 0, 0]), Math.max(1, 2));
+  });
+});
 
 // describe('dropout', () => {
 //   test('should apply dropout correctly', () => {

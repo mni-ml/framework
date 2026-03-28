@@ -55,7 +55,7 @@ export function avgpool2d(input: Tensor, kernel: [number, number]): Tensor {
     const inputData = perm.data;
 
     const fn = (acc: number, x: number) => acc + x;
-    const reduceFn = fastTensorReduce(sumFn);
+    const reduceFn = fastTensorReduce(fn);
 
     // for 2d convolution pooling, we reduce over both cols and rows
 
@@ -83,6 +83,29 @@ export function avgpool2d(input: Tensor, kernel: [number, number]): Tensor {
     return new Tensor(outputData);
 }
 
-export function max(input: Tensor, kernel: [number, number]): Tensor {
+export function maxpool2d(input: Tensor, kernel: [number, number]): Tensor {
+    const [tiled, newHeight, newWidth]: [Tensor, number, number] = tile(input, kernel);
+    const [kh, kw] = kernel;
 
+    // [batch, channel, new height, kh, new width, kw] -> [batch, channel, new height, new width, kh, kw]
+    // note the swapping of index 3 & 4
+    const perm = tiled.permute(0, 1, 2, 4, 3, 5);
+
+    const [batch, channel] = perm.shape as [number, number, number, number, number, number];
+
+    const inputData = perm.data;
+
+    const fn = (max: number, x: number) => Math.max(max, x);
+    const reduceFn = fastTensorReduce(fn);
+
+    const t1 = TensorData.zeros([batch, channel, newHeight, newWidth, kh, 1])
+    reduceFn(t1.storage, t1.shape, t1.strides, inputData.storage, inputData.shape, inputData.strides, 5);    
+
+    const t2 = TensorData.zeros([batch, channel, newHeight, newWidth, 1, 1])
+    reduceFn(t2.storage, t2.shape, t2.strides, t1.storage, t1.shape, t1.strides, 4);    
+
+    // now shape is: (batch, channel, newHeight, newWidth)
+    const outputData = new TensorData(t2.storage, [batch, channel, 1, 1]);
+
+    return new Tensor(outputData);
 } 
