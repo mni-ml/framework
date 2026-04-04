@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "tstorch": "workspace:*"
+    "@mni-ml/framework": "workspace:*"
   },  
   "scripts": {
     "build": "tsc -b .",

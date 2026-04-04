@@ -1,7 +1,7 @@
 import {
     Tensor, TensorData, Module, Parameter, SGD,
     Linear, Conv1dModule, Embedding, crossEntropyLoss, destroyPool,
-} from "tstorch";
+} from "@mni-ml/framework";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";

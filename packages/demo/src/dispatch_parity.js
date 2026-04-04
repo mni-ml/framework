@@ -1,4 +1,4 @@
-import { Tensor, destroyPool } from 'tstorch';
+import { Tensor, destroyPool } from '@mni-ml/framework';
 import { pathToFileURL } from 'node:url';
 
 function train(batchSize, features, epochs, lr) {

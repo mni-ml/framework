@@ -1,9 +1,9 @@
 {
-  "name": "tstorch-workspace",
+  "name": "framework-workspace",
   "private": true,
   "workspaces": ["packages/*"],
   "scripts": {
-    "demo": "pnpm install && pnpm --filter tstorch run build && pnpm add tstorch --filter demo && pnpm --filter demo run start",
-    "test-tstorch": "pnpm --filter tstorch run test"
+    "demo": "pnpm install && pnpm --filter @mni-ml/framework run build && pnpm add @mni-ml/framework --filter demo && pnpm --filter demo run start",
+    "test-framework": "pnpm --filter @mni-ml/framework run test"
   }
 }

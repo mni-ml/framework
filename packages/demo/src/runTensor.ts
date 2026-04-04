@@ -1,4 +1,4 @@
-import { Tensor, datasets, SGD, Module, Parameter, Linear, destroyPool } from "tstorch";
+import { Tensor, datasets, SGD, Module, Parameter, Linear, destroyPool } from "@mni-ml/framework";
 
 type Point = [number, number];
 type Graph = { N: number; X: Point[]; y: number[] };

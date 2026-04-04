@@ -1,4 +1,4 @@
-import { Scalar, datasets, SGD, Module, Parameter } from "tstorch";
+import { Scalar, datasets, SGD, Module, Parameter } from "@mni-ml/framework";
 
 type Point = [number, number];
 type Graph = { N: number; X: Point[]; y: number[] };

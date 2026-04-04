@@ -1,7 +1,7 @@
 import {
     Tensor, TensorData, Module, Parameter, SGD,
     Linear, Conv2dModule, crossEntropyLoss, maxpool2d, dropout, destroyPool,
-} from "tstorch";
+} from "@mni-ml/framework";
 import { loadMnist } from "./mnistLoader.js";
 import { writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";

@@ -1,8 +1,8 @@
-# TSTorch
+# @mni-ml/framework
 
-TSTorch is a PyTorch-like Machine Learning framework in TypeScript + WebGPU, intended as a working library and educational resource.
+A PyTorch-like Machine Learning framework in TypeScript + WebGPU, intended as a working library and educational resource.
 
-Once completed, TSTorch will also allow runtime analysis, exposing the core execution mechanisms behind modern deep learning systems: autograd, graph capture, kernel fusion, and GPU memory planning.
+Once completed, the framework will also allow runtime analysis, exposing the core execution mechanisms behind modern deep learning systems: autograd, graph capture, kernel fusion, and GPU memory planning.
 
 ## Project status
 
@@ -36,7 +36,7 @@ pnpm run demo fast --BACKEND cpu --HIDDEN 100 --DATASET split --RATE 0.05 --EPOC
 pnpm run demo fast --DATASET all   # run all datasets
 ```
 
-To run tests: `pnpm run test-tstorch`
+To run tests: `pnpm run test-framework`
 
 ## Task 3.5: Training Results
 

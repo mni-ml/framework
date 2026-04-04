@@ -726,7 +726,7 @@ describe("dispatch parity across PARALLEL_THRESHOLD", () => {
 
         if (!existsSync(tscPath)) {
             throw new Error(
-                'typescript is required to build tstorch before running dispatch parity',
+                'typescript is required to build @mni-ml/framework before running dispatch parity',
             );
         }
 
@@ -747,7 +747,7 @@ describe("dispatch parity across PARALLEL_THRESHOLD", () => {
         if (buildResult.status !== 0) {
             const stderr = buildResult.stderr?.trim();
             throw new Error(
-                `tstorch build failed${stderr ? `: ${stderr}` : ''}`,
+                `framework build failed${stderr ? `: ${stderr}` : ''}`,
             );
         }
 
