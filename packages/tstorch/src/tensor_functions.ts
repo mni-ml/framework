@@ -151,6 +151,18 @@ export function prod(a: TensorData, dim: number): TensorData {
     return out;
 }
 
+export function max(a: TensorData, dim: number): TensorData {
+    const outShape = a.shape.map((s, i) => (i === dim ? 1 : s));
+    const out = zeros(outShape);
+    const reduceFn = tensorReduce(operators.max);
+    reduceFn(
+        out.storage, out.shape, out.strides,
+        a.storage, a.shape, a.strides,
+        dim
+    );
+    return out;
+}
+
 export function permute(a: TensorData, order: number[]): TensorData {
     return a.permute(...order);
 }
@@ -364,6 +376,22 @@ export function Sum(dim: number): typeof TensorFunction {
         static backward(ctx: TensorContext, gradOutput: Tensor): Tensor[] {
             const [a] = ctx.savedTensors;
             return [gradOutput.mul(Tensor.ones(a!.shape))];
+        }
+    };
+}
+
+export function Max(dim: number): typeof TensorFunction {
+    return class extends TensorFunction {
+        static forward(ctx: TensorContext, a: Tensor): Tensor {
+            const out = new Tensor(max(a.data, dim));
+            ctx.saveForBackward(a, out);
+            return out;
+        }
+        static backward(ctx: TensorContext, gradOutput: Tensor): Tensor[] {
+            const [a, maxVals] = ctx.savedTensors;
+            const mask = new Tensor(eq(a!.data, maxVals!.data));
+            const maxCount = new Tensor(sum(mask.data, dim));
+            return [gradOutput.mul(mask).mul(maxCount.inv())];
         }
     };
 }

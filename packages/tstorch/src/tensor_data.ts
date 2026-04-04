@@ -13,6 +13,7 @@ export type Index = readonly number[];
 
 export type OutIndex = number[];
 
+// Note that this type must be imported. Do not use the Web Storage API type
 export type Storage = Float64Array;
 
 export function indexToPosition(idx: Index, strides: Strides): number {

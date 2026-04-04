@@ -29,6 +29,7 @@ import {
     MatMul as MatMulFn,
     Conv1d as Conv1dFn,
     Conv2d as Conv2dFn,
+    Max as MaxFn,
 } from './tensor_functions.js';
 import { backPropagateTensor } from './autodiff.js';
 
@@ -262,6 +263,13 @@ export class Tensor {
         }
 
         return Tensor.apply(SumFn(dim), this);
+    }
+
+    max(dim: number): Tensor {
+        if (dim < 0 || dim >= this.dims) {
+            throw new Error(`Invalid dimension ${dim} for tensor with ${this.dims} dimensions`);
+        }
+        return Tensor.apply(MaxFn(dim), this);
     }
 
     mean(dim?: number): Tensor {
