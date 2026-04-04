@@ -63,7 +63,7 @@ export function crossEntropyLoss(input: Tensor, target: Tensor): Tensor {
 // Initialization helpers
 // ============================================================
 
-function randRange(shape: Shape, low: number, high: number): Tensor {
+export function randRange(shape: Shape, low: number, high: number): Tensor {
     const size = shapeProduct(shape);
     const storage = new Float64Array(size);
     for (let i = 0; i < size; i++) {

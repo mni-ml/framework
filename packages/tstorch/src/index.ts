@@ -20,4 +20,4 @@ export { tensorMap, tensorZip, tensorReduce, tensorConv1d, tensorConv2d } from "
 export { fastTensorMap, fastTensorZip, fastTensorReduce, destroyPool } from "./fast_ops.js";
 
 // Neural network layers and functions
-export { Linear, ReLU, Sigmoid as SigmoidModule, Tanh, mseLoss, crossEntropyLoss, tile, avgpool2d, maxpool2d, softmax, logsoftmax, dropout } from "./nn.js";
+export { Linear, ReLU, Sigmoid as SigmoidModule, Tanh, mseLoss, crossEntropyLoss, randRange, tile, avgpool2d, maxpool2d, softmax, logsoftmax, dropout } from "./nn.js";

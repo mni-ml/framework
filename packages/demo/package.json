@@ -9,6 +9,7 @@
     "build": "tsc -b .",
     "start": "pnpm build && node dist/index.js",
     "start:tensor": "pnpm build && node dist/index.js tensor",
-    "start:scalar": "pnpm build && node dist/index.js scalar"
+    "start:scalar": "pnpm build && node dist/index.js scalar",
+    "start:fast": "pnpm build && node dist/index.js fast"
   }
 }

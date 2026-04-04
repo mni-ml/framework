@@ -1,45 +1,12 @@
-import { Tensor, TensorData, shapeProduct, datasets, SGD, Module, Parameter, destroyPool } from "tstorch";
+import { Tensor, datasets, SGD, Module, Parameter, Linear, destroyPool } from "tstorch";
 
 type Point = [number, number];
 type Graph = { N: number; X: Point[]; y: number[] };
 
-function RParam(...shape: number[]): Parameter<Tensor> {
-    const size = shapeProduct(shape);
-    const storage = new Float64Array(size);
-    for (let i = 0; i < size; i++) {
-        storage[i] = 2 * (Math.random() - 0.5);
-    }
-    return new Parameter(new Tensor(new TensorData(storage, shape)));
-}
-
-class Linear extends Module<Parameter<Tensor>> {
-    weights: Parameter<Tensor>;
-    bias: Parameter<Tensor>;
-    outSize: number;
-
-    constructor(inSize: number, outSize: number) {
-        super();
-        this.outSize = outSize;
-        this.weights = RParam(inSize, outSize);
-        this.bias = RParam(outSize);
-    }
-
-    forward(x: Tensor): Tensor {
-        const batch = x.shape[0]!;
-        const inSize = x.shape[1]!;
-        return this.weights.value
-            .view(1, inSize, this.outSize)
-            .mul(x.view(batch, inSize, 1))
-            .sum(1)
-            .view(batch, this.outSize)
-            .add(this.bias.value.view(this.outSize));
-    }
-}
-
-class Network extends Module<Parameter<Tensor>> {
-    layer1: Linear;
-    layer2: Linear;
-    layer3: Linear;
+class Network extends Module {
+    layer1!: Linear;
+    layer2!: Linear;
+    layer3!: Linear;
 
     constructor(hiddenLayers: number) {
         super();
@@ -78,7 +45,7 @@ class TensorTrain {
         this.learningRate = learningRate;
         this.maxEpochs = maxEpochs;
         this.model = new Network(this.hiddenLayers);
-        const optim = new SGD(this.model.parameters(), learningRate);
+        const optim = new SGD(this.model.parameters() as Parameter<Tensor>[], learningRate);
 
         const X = Tensor.tensor(data.X);
         const y = Tensor.tensor(data.y);
@@ -88,7 +55,8 @@ class TensorTrain {
 
             const out = this.model.forward(X).view(data.N);
 
-            // Binary cross-entropy via: prob = out*y + (out-1)*(y-1)
+            // Binary cross-entropy: -[y*log(p) + (1-y)*log(1-p)]
+            // Rearranged as: -log(p*y + (1-p)*(1-y))
             const prob = out.mul(y).add(out.sub(1.0).mul(y.sub(1.0)));
             const loss = prob.log().neg();
 
@@ -97,7 +65,6 @@ class TensorTrain {
 
             optim.step();
 
-            // Reset input tensor grads to avoid accumulation across epochs
             X.zero_grad_();
             y.zero_grad_();
 
