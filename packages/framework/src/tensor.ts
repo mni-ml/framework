@@ -61,13 +61,16 @@ export class Tensor {
         }
     }
 
-    chainRule(gradOutput: Tensor): [Tensor, Tensor][] {
+    async chainRule(gradOutput: Tensor): Promise<[Tensor, Tensor][]> {
         const h = this.history;
         if (!h || !h.lastFn || !h.ctx) {
             throw new Error("Cannot call chainRule on leaf tensor");
         }
 
-        const gradients: Tensor[] = h.lastFn.backward(h.ctx, gradOutput);
+        const gradientsOrPromise = h.lastFn.backward(h.ctx, gradOutput);
+        const gradients: Tensor[] = gradientsOrPromise instanceof Promise
+            ? await gradientsOrPromise
+            : gradientsOrPromise;
 
         if (gradients.length !== h.inputs.length) {
             throw new Error(
@@ -94,17 +97,38 @@ export class Tensor {
         const ctx = new TensorContext();
         const result = fn.forward(ctx, ...tensors);
 
+        if (result instanceof Promise) {
+            throw new Error('Use Tensor.applyAsync for async TensorFunctions');
+        }
+
         const history = new TensorHistory(fn, ctx, tensors);
         result.history = history;
 
         return result;
     }
 
-    backward(gradOutput?: Tensor): void {
+    static async applyAsync(fn: typeof TensorFunction, ...vals: TensorLike[]): Promise<Tensor> {
+        const tensors: Tensor[] = vals.map(v =>
+            v instanceof Tensor ? v : Tensor.tensor(v)
+        )
+
+        const ctx = new TensorContext();
+        const resultOrPromise = fn.forward(ctx, ...tensors);
+        const result = resultOrPromise instanceof Promise
+            ? await resultOrPromise
+            : resultOrPromise;
+
+        const history = new TensorHistory(fn, ctx, tensors);
+        result.history = history;
+
+        return result;
+    }
+
+    async backward(gradOutput?: Tensor): Promise<void> {
         if (gradOutput == undefined) {
             gradOutput = Tensor.ones(this.shape);
         }
-        backPropagateTensor(this, gradOutput);
+        await backPropagateTensor(this, gradOutput);
     }
 
     static tensor(values: any, shape?: Shape): Tensor {
@@ -234,8 +258,8 @@ export class Tensor {
         return this.mul(other);
     }
 
-    matmul(other: Tensor): Tensor {
-        return Tensor.apply(MatMulFn, this, other);
+    matmul(other: Tensor): Promise<Tensor> {
+        return Tensor.applyAsync(MatMulFn, this, other);
     }
 
     conv1d(weight: Tensor): Tensor {

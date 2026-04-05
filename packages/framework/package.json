@@ -1,7 +1,7 @@
 {
   "name": "@mni-ml/framework",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.5",
   "description": "A minimal machine learning library in TypeScript — autograd, tensors, neural network modules, and training utilities inspired by minitorch.",
   "license": "MIT",
   "repository": {

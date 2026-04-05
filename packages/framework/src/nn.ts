@@ -22,8 +22,8 @@ export class Linear extends Module {
         this.bias = new Parameter(randRange([outFeatures], -bound, bound));
     }
 
-    forward(input: Tensor): Tensor {
-        return input.matmul(this.weight.value).add(this.bias.value);
+    async forward(input: Tensor): Promise<Tensor> {
+        return (await input.matmul(this.weight.value)).add(this.bias.value);
     }
 }
 
@@ -269,4 +269,8 @@ export function dropout(input: Tensor, rate: number = 0.5, ignore: boolean = fal
     if (rate >= 1.0) return Tensor.zeros(input.shape);
     const mask = Tensor.rand(input.shape).gt(rate);
     return input.mul(mask).mul(1 / (1 - rate));
+}
+
+export function gelu(input: Tensor): Tensor {
+    return input.mul(input.mul(1.702).sigmoid());
 }

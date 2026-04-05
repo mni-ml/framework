@@ -5,14 +5,34 @@ import type {
 } from './tensor_data.js';
 
 import {
+    TensorData,
     indexToPosition,
     toIndex,
     shapeProduct,
-    broadcastIndex
+    strides as computeStrides,
+    broadcastIndex,
+    createSharedStorage,
+    shapeBroadcast,
 } from './tensor_data.js';
 
 import { Tensor } from './tensor.js';
-import { shapeBroadcast } from './tensor_data.js';
+
+type GpuMatMulFn = typeof import('./gpu_ops.js')['gpuTensorMatrixMultiply'];
+let _gpuMatMul: GpuMatMulFn | null | false = null;
+let _gpuCallFailed = false;
+
+async function getGpuMatMul(): Promise<GpuMatMulFn | null> {
+    if (_gpuCallFailed || _gpuMatMul === false) return null;
+    if (_gpuMatMul !== null) return _gpuMatMul;
+    try {
+        const mod = await import('./gpu_ops.js');
+        _gpuMatMul = mod.gpuTensorMatrixMultiply;
+        return _gpuMatMul;
+    } catch {
+        _gpuMatMul = false;
+        return null;
+    }
+}
 
 export function tensorMap(
     fn: (x: number) => number
@@ -138,76 +158,159 @@ export function tensorReduce(
     }
 }
 
+function isContiguous(shape: Shape, strs: Strides): boolean {
+    const natural = computeStrides(shape);
+    for (let i = 0; i < shape.length; i++) {
+        if (strs[i] !== natural[i]) return false;
+    }
+    return true;
+}
+
+function makeContiguous(data: { storage: Storage; shape: Shape; strides: Strides; size: number }): { storage: Storage; shape: Shape; strides: Strides } {
+    if (isContiguous(data.shape, data.strides)) return data;
+    const out = createSharedStorage(data.size);
+    const idx: number[] = new Array(data.shape.length).fill(0);
+    for (let i = 0; i < data.size; i++) {
+        toIndex(i, data.shape, idx);
+        out[i] = data.storage[indexToPosition(idx, data.strides)]!;
+    }
+    return { storage: out, shape: data.shape, strides: computeStrides(data.shape) };
+}
+
 /**
- * Matrix multiply supporting 2D and 3D inputs with batch broadcasting.
- * 2D inputs are padded to 3D internally; if both were 2D the output is squeezed back.
+ * Compute batch offset for a given output batch ordinal, handling broadcast.
+ * outBatchDims is the broadcast result shape, inputBatchDims is the original.
  */
-export function tensorMatrixMultiply(A: Tensor, B: Tensor): Tensor {
-    // Index from end of tensor shape, such that length - 2 is rows, length -1 is cols
-    const [M, K] = [A.shape[A.shape.length - 2], A.shape[A.shape.length - 1]];
-    const [K2, N] = [B.shape[B.shape.length - 2], B.shape[B.shape.length - 1]];
+function buildBatchMap(outBatchDims: number[], inputBatchDims: number[]): Int32Array {
+    const outBatchSize = shapeProduct(outBatchDims);
+    const map = new Int32Array(outBatchSize);
+    const numDims = outBatchDims.length;
+    const inputLen = inputBatchDims.length;
+    const offset = numDims - inputLen;
 
-    if (!M || !K || !K2 || !N) {
-        return A;
-    }
-
-    if (K !== K2) {
-        throw new Error("A is of shape MxK. Expected B of shape K2xN");
-    }
-
-    let a: Tensor = A;
-    let b: Tensor = B;
-
-    // Make these always be exactly a 3 dimensional multiply, so the kernel only ever needs to deal with one batch loop + the 2D multiply
-    let Ais2D = false;
-    let Bis2D = false;
-    if (A.data.shape.length === 2) {
-        a = A.contiguous().view(1, M, K);
-        Ais2D = true;
-    }
-    if (B.data.shape.length === 2) {
-        b = B.contiguous().view(1, K2, N);
-        Bis2D = true;
-    }
-    // If both A and B had to be converted from 2D -> 3D, then we must remove a dimension at the end. Else it will simply just disappear as per mat mult
-    const both2D: boolean = Ais2D && Bis2D;
-
-    // Get resulting dimensions as array
-    const outShape = [...shapeBroadcast(a.shape.slice(0, -2), b.shape.slice(0, -2))];
-    outShape.push(M);
-    outShape.push(N);
-    let out = Tensor.zeros(outShape);
-
-    const size = shapeProduct(outShape);
-
-    const outIndex: number[] = new Array(outShape.length).fill(0);
-    const aIndex: number[] = new Array(a.shape.length).fill(0);
-    const bIndex: number[] = new Array(b.shape.length).fill(0);
-
-    for (let ordinal = 0; ordinal < size; ordinal++) {
-        toIndex(ordinal, outShape, outIndex);
-        
-        broadcastIndex(outIndex, outShape, a.shape, aIndex);
-        broadcastIndex(outIndex, outShape, b.shape, bIndex);
-
-        let acc = 0;
-
-        for (let k = 0; k < K; k++) {
-            aIndex[aIndex.length - 1] = k;      // K dim in A
-            bIndex[bIndex.length - 2] = k;      // K dim in B
-
-            acc += a.get(aIndex) * b.get(bIndex);
+    for (let batch = 0; batch < outBatchSize; batch++) {
+        let remaining = batch;
+        let inputOrdinal = 0;
+        let inputStride = 1;
+        for (let d = inputLen - 1; d >= 0; d--) {
+            inputStride = d < inputLen - 1 ? inputStride * inputBatchDims[d + 1]! : 1;
         }
+        const inputStrides = new Array(inputLen);
+        let s = 1;
+        for (let d = inputLen - 1; d >= 0; d--) {
+            inputStrides[d] = s;
+            s *= inputBatchDims[d]!;
+        }
+        remaining = batch;
+        const outIdx = new Array(numDims);
+        for (let d = numDims - 1; d >= 0; d--) {
+            outIdx[d] = remaining % outBatchDims[d]!;
+            remaining = Math.floor(remaining / outBatchDims[d]!);
+        }
+        inputOrdinal = 0;
+        for (let d = 0; d < inputLen; d++) {
+            const idx = inputBatchDims[d] === 1 ? 0 : outIdx[d + offset]!;
+            inputOrdinal += idx * inputStrides[d];
+        }
+        map[batch] = inputOrdinal;
+    }
+    return map;
+}
 
-        out.set(outIndex, acc);
+function cpuMatMul(
+    aStorage: Storage, aBatchDims: number[], M: number, K: number,
+    bStorage: Storage, bBatchDims: number[], N: number,
+    outBatchDims: number[],
+): Storage {
+    const outBatchSize = shapeProduct(outBatchDims);
+    const outSize = outBatchSize * M * N;
+    const outStorage = createSharedStorage(outSize);
+    const aMK = M * K;
+    const bKN = K * N;
+    const outMN = M * N;
+
+    const aBatchMap = buildBatchMap(outBatchDims, aBatchDims);
+    const bBatchMap = buildBatchMap(outBatchDims, bBatchDims);
+
+    for (let batch = 0; batch < outBatchSize; batch++) {
+        const aOff = aBatchMap[batch]! * aMK;
+        const bOff = bBatchMap[batch]! * bKN;
+        const outOff = batch * outMN;
+
+        for (let i = 0; i < M; i++) {
+            const aRowBase = aOff + i * K;
+            const outRowBase = outOff + i * N;
+            for (let k = 0; k < K; k++) {
+                const a_ik = aStorage[aRowBase + k]!;
+                const bRowBase = bOff + k * N;
+                for (let j = 0; j < N; j++) {
+                    outStorage[outRowBase + j] = outStorage[outRowBase + j]! + a_ik * bStorage[bRowBase + j]!;
+                }
+            }
+        }
+    }
+    return outStorage;
+}
+
+/**
+ * Async matrix multiply: tries GPU first, falls back to optimized CPU.
+ * Supports arbitrary batch dimensions with broadcasting.
+ */
+export async function tensorMatrixMultiply(A: Tensor, B: Tensor): Promise<Tensor> {
+    const M = A.shape[A.shape.length - 2]!;
+    const K = A.shape[A.shape.length - 1]!;
+    const K2 = B.shape[B.shape.length - 2]!;
+    const N = B.shape[B.shape.length - 1]!;
+
+    if (!M || !K || !K2 || !N) return A;
+    if (K !== K2) throw new Error("A is of shape MxK. Expected B of shape K2xN");
+
+    const both2D = A.data.shape.length === 2 && B.data.shape.length === 2;
+    const aBatchDims = A.data.shape.length <= 2 ? [1] : [...A.shape.slice(0, -2)] as number[];
+    const bBatchDims = B.data.shape.length <= 2 ? [1] : [...B.shape.slice(0, -2)] as number[];
+    const outBatchDims = shapeBroadcast(aBatchDims, bBatchDims) as number[];
+
+    const aContig = makeContiguous(A.data);
+    const bContig = makeContiguous(B.data);
+
+    const aFullShape = [...aBatchDims, M, K];
+    const bFullShape = [...bBatchDims, K, N];
+    const outShape = [...outBatchDims, M, N];
+    const outSize = shapeProduct(outShape);
+    const outStrides = computeStrides(outShape);
+
+    const aStrides = computeStrides(aFullShape);
+    const bStrides = computeStrides(bFullShape);
+
+    let outStorage: Storage;
+    const gpuFn = await getGpuMatMul();
+
+    if (gpuFn) {
+        try {
+            outStorage = createSharedStorage(outSize);
+            await gpuFn(
+                outStorage, outShape, outStrides, outSize,
+                aContig.storage, aFullShape, aStrides,
+                bContig.storage, bFullShape, bStrides,
+            );
+        } catch {
+            _gpuCallFailed = true;
+            outStorage = cpuMatMul(
+                aContig.storage, aBatchDims, M, K,
+                bContig.storage, bBatchDims, N,
+                outBatchDims,
+            );
+        }
+    } else {
+        outStorage = cpuMatMul(
+            aContig.storage, aBatchDims, M, K,
+            bContig.storage, bBatchDims, N,
+            outBatchDims,
+        );
     }
 
-    // Revert extra 3rd dimension
-    if (both2D) {
-        out = out.view(M,N);
-    }
-
-    return out;
+    const finalShape = both2D ? [M, N] : outShape;
+    return new Tensor(new TensorData(outStorage, finalShape));
 }
 
 /**

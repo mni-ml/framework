@@ -219,11 +219,11 @@ export class TensorHistory {
 }
 
 export abstract class TensorFunction {
-    static forward(ctx: TensorContext, ...inputs: Tensor[]): Tensor {
+    static forward(ctx: TensorContext, ...inputs: Tensor[]): Tensor | Promise<Tensor> {
         throw new Error("forward not implemented");
     }
 
-    static backward(ctx: TensorContext, gradOutput: Tensor): Tensor[] {
+    static backward(ctx: TensorContext, gradOutput: Tensor): Tensor[] | Promise<Tensor[]> {
         throw new Error("backward not implemented");
     }
 }
@@ -478,12 +478,12 @@ function reduceToShape(t: Tensor, targetShape: Shape): Tensor {
 }
 
 export class MatMul extends TensorFunction {
-    static forward(ctx: TensorContext, a: Tensor, b: Tensor): Tensor {
+    static async forward(ctx: TensorContext, a: Tensor, b: Tensor): Promise<Tensor> {
         ctx.saveForBackward(a, b);
-        return tensorMatrixMultiply(a, b);
+        return await tensorMatrixMultiply(a, b);
     }
 
-    static backward(ctx: TensorContext, gradOut: Tensor): Tensor[] {
+    static async backward(ctx: TensorContext, gradOut: Tensor): Promise<Tensor[]> {
         const saved = ctx.savedTensors;
         if (!saved || saved.length !== 2) {
             throw new Error("MatMul backward: saved tensors missing");
@@ -495,8 +495,8 @@ export class MatMul extends TensorFunction {
         const bT = transposeLast2(b);
         const aT = transposeLast2(a);
 
-        const gradA = tensorMatrixMultiply(gradOut, bT);
-        const gradB = tensorMatrixMultiply(aT, gradOut);
+        const gradA = await tensorMatrixMultiply(gradOut, bT);
+        const gradB = await tensorMatrixMultiply(aT, gradOut);
 
         gradA.history = null;
         gradB.history = null;

@@ -80,7 +80,7 @@ export function topologicalSortTensor(tensor: Tensor): Tensor[] {
     return sorted.reverse();
 }
 
-export function backPropagateTensor(tensor: Tensor, gradOutput: Tensor): void {
+export async function backPropagateTensor(tensor: Tensor, gradOutput: Tensor): Promise<void> {
     const sorted = topologicalSortTensor(tensor);
     const gradients: Map<Tensor, Tensor> = new Map();
 
@@ -93,7 +93,7 @@ export function backPropagateTensor(tensor: Tensor, gradOutput: Tensor): void {
         if (node.isLeaf()) {
             node.accumulateGrad(grad);
         } else {
-            for (const [parent, parentGrad] of node.chainRule(grad)) {
+            for (const [parent, parentGrad] of await node.chainRule(grad)) {
                 const existing = gradients.get(parent);
                 if (existing) {
                     gradients.set(parent, existing.add(parentGrad));

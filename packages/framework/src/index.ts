@@ -19,5 +19,15 @@ export * as tensorFunctions from "./tensor_functions.js";
 export { tensorMap, tensorZip, tensorReduce, tensorConv1d, tensorConv2d } from "./tensor_ops.js";
 export { fastTensorMap, fastTensorZip, fastTensorReduce, destroyPool } from "./fast_ops.js";
 
+// GPU backend — lazy re-export to avoid crashing on platforms without webgpu
+export async function destroyDevice(): Promise<void> {
+    try {
+        const mod = await import('./gpu_backend.js');
+        mod.destroyDevice();
+    } catch {
+        // webgpu not available on this platform
+    }
+}
+
 // Neural network layers and functions
-export { Linear, ReLU, Sigmoid as SigmoidModule, Tanh, Conv1d as Conv1dModule, Conv2d as Conv2dModule, Embedding, mseLoss, crossEntropyLoss, randRange, tile, avgpool2d, maxpool2d, softmax, logsoftmax, dropout } from "./nn.js";
+export { Linear, ReLU, Sigmoid as SigmoidModule, Tanh, Conv1d as Conv1dModule, Conv2d as Conv2dModule, Embedding, mseLoss, crossEntropyLoss, randRange, tile, avgpool2d, maxpool2d, softmax, logsoftmax, dropout, gelu } from "./nn.js";
