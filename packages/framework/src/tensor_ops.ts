@@ -148,7 +148,7 @@ export function tensorMatrixMultiply(A: Tensor, B: Tensor): Tensor {
     const [K2, N] = [B.shape[B.shape.length - 2], B.shape[B.shape.length - 1]];
 
     if (!M || !K || !K2 || !N) {
-        return A;
+        throw new Error("Matmul requires both inputs to be at least 2D.");
     }
 
     if (K !== K2) {
