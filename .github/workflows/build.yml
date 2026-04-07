@@ -151,10 +151,15 @@ jobs:
         run: ls -lh *.node
 
       - name: Install dependencies and build TypeScript
-        working-directory: packages/framework
+        shell: bash
         run: |
-          npm install --install-strategy=nested --ignore-scripts typescript @types/node
+          # Move root package.json to avoid npm workspace resolution
+          mv package.json _package.json.bak
+          cd packages/framework
+          npm install
           npx tsc
+          cd ../..
+          mv _package.json.bak package.json
 
       - name: Run tests
         working-directory: packages/framework

@@ -135,10 +135,14 @@ jobs:
           path: packages/framework/native/
 
       - name: Install dependencies and build TypeScript
-        working-directory: packages/framework
+        shell: bash
         run: |
-          npm install --install-strategy=nested --ignore-scripts typescript @types/node
+          mv package.json _package.json.bak
+          cd packages/framework
+          npm install
           npx tsc
+          cd ../..
+          mv _package.json.bak package.json
 
       - name: Run tests
         working-directory: packages/framework
@@ -216,6 +220,6 @@ jobs:
             require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
 
-          npm install --install-strategy=nested --ignore-scripts typescript @types/node
+          npm install
           npx tsc
           npm publish --provenance --access public
