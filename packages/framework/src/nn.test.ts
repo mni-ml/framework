@@ -1,6 +1,6 @@
 import { describe, test, expect } from '@jest/globals';
-import { tile, avgpool2d, maxpool2d, softmax, logsoftmax, dropout } from './nn';
-import { Tensor } from './tensor';
+import { tile, avgpool2d, maxpool2d, softmax, logsoftmax, dropout } from './nn.js';
+import { Tensor } from './tensor.js';
 
 function assertClose(actual: number, expected: number, tolerance = 1e-5) {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tolerance);
