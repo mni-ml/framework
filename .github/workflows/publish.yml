@@ -110,17 +110,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build tools
+      - name: Install build tools and build CUDA addon
+        working-directory: packages/framework/native
         run: |
           apt-get update
           apt-get install -y --no-install-recommends curl ca-certificates build-essential pkg-config
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
-          echo "/root/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Build CUDA native addon
-        working-directory: packages/framework/native
-        run: |
-          /root/.cargo/bin/cargo build --release --no-default-features --features cuda
+          export PATH="/root/.cargo/bin:$PATH"
+          cargo build --release --no-default-features --features cuda
 
       - name: Copy binary
         working-directory: packages/framework
