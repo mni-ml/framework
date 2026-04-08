@@ -145,6 +145,28 @@ export class Tensor {
         return new Tensor(new TensorData(storage, shape));
     }
 
+    static randn(shape: Shape): Tensor {
+        const size = shapeProduct(shape);
+        const storage = new Float64Array(size);
+        for (let i = 0; i < size; i += 2) {
+            const u1 = Math.random() || 1e-10;
+            const u2 = Math.random();
+            const r = Math.sqrt(-2 * Math.log(u1));
+            storage[i] = r * Math.cos(2 * Math.PI * u2);
+            if (i + 1 < size) {
+                storage[i + 1] = r * Math.sin(2 * Math.PI * u2);
+            }
+        }
+        return new Tensor(new TensorData(storage, shape));
+    }
+
+    static parameter(shape: Shape, scale?: number): Tensor {
+        const s = scale ?? 1 / Math.sqrt(shapeProduct(shape));
+        const t = Tensor.randn(shape).mul(s);
+        const result = new Tensor(t.data, new TensorHistory());
+        return result;
+    }
+
     get size(): number {
         return this._data.size;
     }
@@ -274,6 +296,7 @@ export class Tensor {
             return result.view();
         }
 
+        if (dim < 0) dim = this.dims + dim;
         if (dim < 0 || dim >= this.dims) {
             throw new Error(`Invalid dimension ${dim} for tensor with ${this.dims} dimensions`);
         }
@@ -288,6 +311,7 @@ export class Tensor {
             return s.mul(1 / count);
         }
 
+        if (dim < 0) dim = this.dims + dim;
         if (dim < 0 || dim >= this.dims) {
             throw new Error(`Invalid dimension ${dim} for tensor with ${this.dims} dimensions`);
         }
