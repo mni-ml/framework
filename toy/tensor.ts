@@ -204,6 +204,16 @@ export class Tensor {
         return Tensor.apply(SqrtFn, this);
     }
 
+    div(other: number | Tensor): Tensor {
+        return this.mul(Tensor._ensureTensor(other).inv());
+    }
+
+    transpose(dim0: number = 0, dim1: number = 1): Tensor {
+        const order = [...Array(this.dims).keys()];
+        [order[dim0]!, order[dim1]!] = [order[dim1]!, order[dim0]!];
+        return this.permute(...order);
+    }
+
     add(other: number | Tensor): Tensor {
         return Tensor.apply(AddFn, this, Tensor._ensureTensor(other));
     }
