@@ -1,6 +1,8 @@
 import { Scalar } from "./scalar.js";
 import { Parameter } from "./module.js";
-import type { Tensor } from "./tensor.js";
+import { Tensor } from "./tensor.js";
+import { TensorData, createSharedStorage } from "./tensor_data.js";
+import { TensorHistory } from "./tensor_functions.js";
 
 export type ParameterValue = Scalar | Tensor;
 
@@ -44,10 +46,22 @@ export class SGD extends Optimizer {
                 continue;
             }
 
-            // Check for derivative (Scalar-like objects)
             if (p.value instanceof Scalar) {
                 const grad = p.value.derivative ?? 0;
                 p.value.data -= this.lr * grad;
+            } else if (p.value instanceof Tensor) {
+                const grad = p.value.grad;
+                if (!grad) continue;
+                const valStorage = p.value.data.storage;
+                const gradStorage = grad.data.storage;
+                const size = p.value.size;
+                const newStorage = createSharedStorage(size);
+                for (let i = 0; i < size; i++) {
+                    newStorage[i] = valStorage[i]! - this.lr * gradStorage[i]!;
+                }
+                const updated = new Tensor(new TensorData(newStorage, p.value.shape));
+                updated.history = new TensorHistory();
+                p.value = updated;
             }
         }
     }
