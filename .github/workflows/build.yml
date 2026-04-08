@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, generalizing]
   pull_request:
-    branches: [main]
+    branches: [main, generalizing]
 
 permissions:
   contents: read
@@ -19,6 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # ── CPU builds ──
           - target: x86_64-apple-darwin
             os: macos-14
             suffix: darwin-x64
@@ -50,6 +51,31 @@ jobs:
             lib_ext: dll
             feature: cpu
 
+          # ── WebGPU builds ──
+          - target: aarch64-apple-darwin
+            os: macos-14
+            suffix: darwin-arm64-webgpu
+            lib_ext: dylib
+            feature: webgpu
+
+          - target: x86_64-apple-darwin
+            os: macos-14
+            suffix: darwin-x64-webgpu
+            lib_ext: dylib
+            feature: webgpu
+
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            suffix: linux-x64-gnu-webgpu
+            lib_ext: so
+            feature: webgpu
+
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            suffix: win32-x64-msvc-webgpu
+            lib_ext: dll
+            feature: webgpu
+
     runs-on: ${{ matrix.os }}
     name: Build ${{ matrix.suffix }}
 
@@ -67,6 +93,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
+      - name: Install Vulkan SDK (Linux WebGPU)
+        if: matrix.feature == 'webgpu' && runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvulkan-dev
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -78,12 +110,12 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/framework/native/target
-          key: cargo-${{ matrix.target }}-${{ hashFiles('packages/framework/native/Cargo.lock') }}
-          restore-keys: cargo-${{ matrix.target }}-
+            src/native/target
+          key: cargo-${{ matrix.target }}-${{ matrix.feature }}-${{ hashFiles('src/native/Cargo.lock') }}
+          restore-keys: cargo-${{ matrix.target }}-${{ matrix.feature }}-
 
       - name: Build native addon
-        working-directory: packages/framework/native
+        working-directory: src/native
         shell: bash
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.cross && 'aarch64-linux-gnu-gcc' || '' }}
@@ -91,15 +123,14 @@ jobs:
           cargo build --release --target ${{ matrix.target }} --no-default-features --features ${{ matrix.feature }}
 
       - name: Copy binary
-        working-directory: packages/framework
         shell: bash
         run: |
           BINARY_NAME="mni-framework-native.${{ matrix.suffix }}.node"
 
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            cp "native/target/${{ matrix.target }}/release/mni_framework_native.dll" "npm/${{ matrix.suffix }}/$BINARY_NAME"
+            cp "src/native/target/${{ matrix.target }}/release/mni_framework_native.dll" "npm/${{ matrix.suffix }}/$BINARY_NAME"
           else
-            cp "native/target/${{ matrix.target }}/release/libmni_framework_native.${{ matrix.lib_ext }}" "npm/${{ matrix.suffix }}/$BINARY_NAME"
+            cp "src/native/target/${{ matrix.target }}/release/libmni_framework_native.${{ matrix.lib_ext }}" "npm/${{ matrix.suffix }}/$BINARY_NAME"
           fi
 
           ls -lh "npm/${{ matrix.suffix }}/$BINARY_NAME"
@@ -108,7 +139,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-${{ matrix.suffix }}
-          path: packages/framework/npm/${{ matrix.suffix }}/mni-framework-native.*.node
+          path: npm/${{ matrix.suffix }}/mni-framework-native.*.node
           if-no-files-found: error
 
   build-cuda:
@@ -121,7 +152,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install build tools and build CUDA addon
-        working-directory: packages/framework/native
+        working-directory: src/native
         run: |
           apt-get update
           apt-get install -y --no-install-recommends curl ca-certificates build-essential pkg-config
@@ -130,16 +161,67 @@ jobs:
           cargo build --release --no-default-features --features cuda
 
       - name: Copy binary
-        working-directory: packages/framework
         run: |
-          cp native/target/release/libmni_framework_native.so npm/linux-x64-gnu-cuda/mni-framework-native.linux-x64-gnu-cuda.node
+          cp src/native/target/release/libmni_framework_native.so npm/linux-x64-gnu-cuda/mni-framework-native.linux-x64-gnu-cuda.node
           ls -lh npm/linux-x64-gnu-cuda/mni-framework-native.linux-x64-gnu-cuda.node
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: native-linux-x64-gnu-cuda
-          path: packages/framework/npm/linux-x64-gnu-cuda/mni-framework-native.*.node
+          path: npm/linux-x64-gnu-cuda/mni-framework-native.*.node
+          if-no-files-found: error
+
+  build-cuda-windows:
+    runs-on: windows-latest
+    name: Build win32-x64-msvc-cuda
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.35
+        id: cuda-toolkit
+        with:
+          cuda: '12.6.3'
+          method: 'network'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src/native/target
+          key: cargo-x86_64-pc-windows-msvc-cuda-${{ hashFiles('src/native/Cargo.lock') }}
+          restore-keys: cargo-x86_64-pc-windows-msvc-cuda-
+
+      - name: Build CUDA addon
+        working-directory: src/native
+        shell: bash
+        run: cargo build --release --target x86_64-pc-windows-msvc --no-default-features --features cuda
+
+      - name: Copy binary
+        shell: bash
+        run: |
+          cp src/native/target/x86_64-pc-windows-msvc/release/mni_framework_native.dll npm/win32-x64-msvc-cuda/mni-framework-native.win32-x64-msvc-cuda.node
+          ls -lh npm/win32-x64-msvc-cuda/mni-framework-native.win32-x64-msvc-cuda.node
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-win32-x64-msvc-cuda
+          path: npm/win32-x64-msvc-cuda/mni-framework-native.*.node
           if-no-files-found: error
 
   test:
@@ -174,23 +256,18 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: packages/framework/native/
+          path: src/native/
 
       - name: List downloaded binary
-        working-directory: packages/framework/native
+        working-directory: src/native
         shell: bash
         run: ls -lh *.node
 
       - name: Install dependencies and build TypeScript
         shell: bash
         run: |
-          mv package.json _package.json.bak
-          cd packages/framework
-          npm install
+          npm install --no-optional
           npx tsc
-          cd ../..
-          mv _package.json.bak package.json
 
       - name: Run tests
-        working-directory: packages/framework
         run: node test/ops.test.js

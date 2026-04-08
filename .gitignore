@@ -8,7 +8,7 @@ out/
 
 # Native addon binaries (built by CI or locally)
 *.node
-packages/framework/native/target/
+src/native/target/
 
 # TypeScript cache
 *.tsbuildinfo
@@ -35,10 +35,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Demo data (downloaded/extracted at prep time; sst2.json is kept)
-packages/demo/data/mnist/
-packages/demo/data/SST-2/
-packages/demo/data/SST-2.zip
 
 # Coverage
 coverage/

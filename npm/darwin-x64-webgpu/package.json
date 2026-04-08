@@ -1,0 +1,21 @@
+{
+  "name": "@mni-ml/framework-darwin-x64-webgpu",
+  "version": "0.3.0",
+  "description": "macOS Intel WebGPU (Metal) native binary for @mni-ml/framework",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "mni-framework-native.darwin-x64-webgpu.node",
+  "files": [
+    "mni-framework-native.darwin-x64-webgpu.node"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mni-ml/framework.git",
+    "directory": "npm/darwin-x64-webgpu"
+  }
+}

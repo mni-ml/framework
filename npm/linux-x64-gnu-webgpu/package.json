@@ -1,0 +1,24 @@
+{
+  "name": "@mni-ml/framework-linux-x64-gnu-webgpu",
+  "version": "0.3.0",
+  "description": "Linux x64 WebGPU (Vulkan) native binary for @mni-ml/framework",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "mni-framework-native.linux-x64-gnu-webgpu.node",
+  "files": [
+    "mni-framework-native.linux-x64-gnu-webgpu.node"
+  ],
+  "libc": [
+    "glibc"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mni-ml/framework.git",
+    "directory": "npm/linux-x64-gnu-webgpu"
+  }
+}
