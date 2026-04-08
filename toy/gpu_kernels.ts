@@ -13,6 +13,9 @@ export const UNARY_OPS: Record<string, string> = {
     exp:     'return exp(x);',
     log:     'return log(x);',
     inv:     'return 1.0 / x;',
+    sin:     'return sin(x);',
+    cos:     'return cos(x);',
+    sqrt:    'return sqrt(x);',
 };
 
 export const BINARY_OPS: Record<string, string> = {
@@ -33,6 +36,9 @@ unaryRegistry.set(operators.relu,    'relu');
 unaryRegistry.set(operators.exp,     'exp');
 unaryRegistry.set(operators.log,     'log');
 unaryRegistry.set(operators.inv,     'inv');
+unaryRegistry.set(operators.sin,     'sin');
+unaryRegistry.set(operators.cos,     'cos');
+unaryRegistry.set(operators.sqrt,    'sqrt');
 
 const binaryRegistry = new Map<Function, string>();
 binaryRegistry.set(operators.add,     'add');
