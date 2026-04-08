@@ -21,6 +21,7 @@ import {
     Sin as SinFn,
     Cos as CosFn,
     Sqrt as SqrtFn,
+    MatMul as MatMulFn,
     Add as AddFn,
     Mul as MulFn,
     LT as LTFn,
@@ -202,6 +203,10 @@ export class Tensor {
 
     sqrt(): Tensor {
         return Tensor.apply(SqrtFn, this);
+    }
+
+    matmul(other: Tensor): Tensor {
+        return Tensor.apply(MatMulFn, this, other);
     }
 
     div(other: number | Tensor): Tensor {

@@ -7,6 +7,8 @@ import {
     shapeProduct,
     shapeBroadcast,
     strides,
+    indexToPosition,
+    createSharedStorage,
 } from './tensor_data.js';
 import { fastTensorMap as tensorMap, fastTensorZip as tensorZip, fastTensorReduce as tensorReduce } from './fast_ops.js';
 import * as operators from './operators.js'
@@ -207,6 +209,32 @@ export function contiguous(a: TensorData): TensorData {
     return id(a);
 }
 
+export function matmul(a: TensorData, b: TensorData): TensorData {
+    if (a.dims !== 2 || b.dims !== 2) {
+        throw new Error(`matmul requires 2D tensors, got ${a.dims}D and ${b.dims}D`);
+    }
+    const M = a.shape[0]!;
+    const K = a.shape[1]!;
+    const N = b.shape[1]!;
+    if (K !== b.shape[0]!) {
+        throw new Error(`matmul shape mismatch: [${a.shape}] x [${b.shape}]`);
+    }
+    const outStorage = createSharedStorage(M * N);
+    const out = new TensorData(outStorage, [M, N]);
+    const aStr = a.strides;
+    const bStr = b.strides;
+    for (let i = 0; i < M; i++) {
+        for (let j = 0; j < N; j++) {
+            let acc = 0;
+            for (let k = 0; k < K; k++) {
+                acc += a.storage[i * aStr[0]! + k * aStr[1]!]! * b.storage[k * bStr[0]! + j * bStr[1]!]!;
+            }
+            outStorage[i * N + j] = acc;
+        }
+    }
+    return out;
+}
+
 export class TensorContext {
     private _savedTensors: Tensor[] = [];
 
@@ -340,6 +368,20 @@ export class Sqrt extends TensorFunction {
         const [result] = ctx.savedTensors;
         // d/dx sqrt(x) = 1 / (2 * sqrt(x)) = grad / (2 * result)
         return [gradOutput.mul(result!.mul(Tensor.tensor(2)).inv())];
+    }
+}
+
+export class MatMul extends TensorFunction {
+    static forward(ctx: TensorContext, a: Tensor, b: Tensor): Tensor {
+        ctx.saveForBackward(a, b);
+        return new Tensor(matmul(a.data, b.data));
+    }
+    static backward(ctx: TensorContext, gradOutput: Tensor): Tensor[] {
+        const [a, b] = ctx.savedTensors;
+        // dL/dA = dL/dC @ B^T, dL/dB = A^T @ dL/dC
+        const gradA = new Tensor(matmul(gradOutput.data, permute(b!.data, [1, 0])));
+        const gradB = new Tensor(matmul(permute(a!.data, [1, 0]), gradOutput.data));
+        return [gradA, gradB];
     }
 }
 
