@@ -6,7 +6,7 @@
     "@mni-ml/framework": "workspace:*"
   },  
   "scripts": {
-    "build": "tsc -b .",
+    "build": "tsc -p .",
     "start": "pnpm build && node dist/index.js",
     "start:tensor": "pnpm build && node dist/index.js tensor",
     "start:scalar": "pnpm build && node dist/index.js scalar",

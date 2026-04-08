@@ -17,11 +17,20 @@
     "skipLibCheck": true
   },
   "include": [
-    "src/tensor.ts",
-    "src/module.ts",
+    "src/index.ts",
     "src/nn.ts",
+    "src/extensions.ts",
+    "src/toy/**/*.ts",
+    "src/core/index.ts",
+    "src/core/tensor.ts",
+    "src/core/autodiff.ts",
+    "src/core/operators.ts",
+    "src/nn/**/*.ts",
     "src/optimizer.ts",
-    "src/index.ts"
+    "src/datasets.ts",
+    "src/scalar.ts",
+    "src/scalar_functions.ts",
+    "src/tensor_data.ts"
   ],
   "exclude": [
     "**/*.test.ts",

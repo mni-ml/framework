@@ -3,7 +3,11 @@
   "private": true,
   "workspaces": ["packages/*"],
   "scripts": {
-    "demo": "pnpm install && pnpm --filter @mni-ml/framework run build && pnpm add @mni-ml/framework --filter demo && pnpm --filter demo run start",
-    "test-framework": "pnpm --filter @mni-ml/framework run test"
+    "demo": "pnpm --filter @mni-ml/framework run build && pnpm --filter demo run start",
+    "test": "pnpm --filter @mni-ml/framework run test",
+    "test-framework": "pnpm --filter @mni-ml/framework run test",
+    "test-framework:all": "pnpm --filter @mni-ml/framework run test:all",
+    "test-framework:native": "pnpm --filter @mni-ml/framework run test:native",
+    "test-framework:gpu": "pnpm --filter @mni-ml/framework run test:gpu"
   }
 }

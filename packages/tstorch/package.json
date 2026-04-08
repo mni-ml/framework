@@ -1,0 +1,45 @@
+{
+  "name": "tstorch",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "A minimal machine learning library in TypeScript — autograd, tensors, neural network modules, and training utilities inspired by minitorch.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/r-chong/TSTorch.git",
+    "directory": "packages/tstorch"
+  },
+  "keywords": [
+    "machine-learning",
+    "autograd",
+    "tensor",
+    "neural-network",
+    "deep-learning",
+    "typescript"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@fast-check/jest": "^2.1.1",
+    "@jest/globals": "^30.2.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.0.8",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "webgpu": "^0.3.8"
+  }
+}

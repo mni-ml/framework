@@ -24,6 +24,22 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./nn": {
+      "types": "./dist/nn.d.ts",
+      "import": "./dist/nn.js"
+    },
+    "./extensions": {
+      "types": "./dist/extensions.d.ts",
+      "import": "./dist/extensions.js"
+    },
+    "./toy": {
+      "types": "./dist/toy/index.d.ts",
+      "import": "./dist/toy/index.js"
     }
   },
   "files": [
@@ -32,13 +48,21 @@
     "README.md"
   ],
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.0.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -b --clean && tsc -b",
     "build:native": "cd native && cargo build --release --features cpu && cp target/release/libmni_framework_native.dylib mni-framework-native.darwin-arm64.node",
     "build:native:cuda": "cd native && cargo build --release --features cuda && cp target/release/libmni_framework_native.so mni-framework-native.linux-x64-gnu.node",
-    "build:all": "npm run build:native && npm run build"
+    "build:all": "npm run build:native && npm run build",
+    "test": "pnpm run test:unit",
+    "test:unit": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --config jest.unit.config.cjs --runInBand",
+    "test:native": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --config jest.native.config.cjs --runInBand --passWithNoTests",
+    "test:gpu": "node ./scripts/run-gpu-tests.mjs",
+    "test:all": "pnpm run test:unit && pnpm run test:native && pnpm run test:gpu"
   }
 }
