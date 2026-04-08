@@ -61,6 +61,18 @@ export function logBack(x: number, d: number):number {
     return d * (1 / max(x, EPS));
 }
 
+export function sin(x: number):number {
+    return Math.sin(x);
+}
+
+export function cos(x: number):number {
+    return Math.cos(x);
+}
+
+export function sqrt(x: number):number {
+    return Math.sqrt(Math.max(x, EPS));
+}
+
 export function inv(x: number):number {
     // guard this?
     return 1 / x;
