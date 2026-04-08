@@ -356,6 +356,10 @@ export class Tensor {
         return Tensor.apply(ContiguousFn, this);
     }
 
+    detach(): Tensor {
+        return new Tensor(this._data);
+    }
+
     zero_grad_():void {
         this.grad = null;
     }
