@@ -1,7 +1,7 @@
 import {
     Tensor,
 } from '../dist/index.js';
-import { assert, assertClose, section, summarize } from './helpers.js';
+import { assert, assertClose, section } from './helpers.js';
 
 // ============================================================
 // Tensor creation
@@ -292,4 +292,3 @@ const storage = dataStub.data.storage;
 assert(storage instanceof Float32Array, 'data.storage returns Float32Array');
 assertClose(storage[0], 1, 1e-6, 'data.storage values');
 
-summarize();

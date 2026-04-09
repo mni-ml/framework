@@ -1,7 +1,7 @@
 import {
     Tensor,
 } from '../dist/index.js';
-import { assert, assertClose, section, summarize } from './helpers.js';
+import { assert, assertClose, section } from './helpers.js';
 
 // ============================================================
 // Autograd / backward
@@ -45,4 +45,3 @@ const mmOut = mmX.matmul(mmY).sum();
 mmOut.backward();
 assert(mmX.grad !== null, 'matmul grad exists');
 
-summarize();

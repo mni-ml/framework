@@ -6,7 +6,7 @@ import {
     crossEntropyLoss, mseLoss, layerNorm,
     randRange, tile, avgpool2d, maxpool2d,
 } from '../dist/index.js';
-import { assert, assertClose, section, summarize } from './helpers.js';
+import { assert, assertClose, section } from './helpers.js';
 
 // ============================================================
 // Activations: relu, gelu, modules
@@ -260,4 +260,3 @@ const rrData = rr.toFloat32();
 assert(rrData.every((v: number) => v >= -2 && v <= 2), 'randRange within [min, max]');
 assert(rr.shape[0] === 100, 'randRange shape');
 
-summarize();

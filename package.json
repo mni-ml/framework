@@ -58,6 +58,6 @@
     "build:native:cuda": "cd src/native && cargo build --release --no-default-features --features cuda && cp target/release/libmni_framework_native.so mni-framework-native.linux-x64-gnu.node",
     "build:native:webgpu": "cd src/native && cargo build --release --no-default-features --features webgpu && cp target/release/libmni_framework_native.dylib mni-framework-native.darwin-arm64.node",
     "build:all": "npm run build:native && npm run build",
-    "test": "for f in test/tensor.test.ts test/nn.test.ts test/autograd.test.ts test/module.test.ts test/native.test.ts; do node --no-warnings --experimental-transform-types --loader ./test/loader.js $f || exit 1; done"
+    "test": "node --no-warnings --experimental-transform-types --loader ./test/loader.js test/run.ts"
   }
 }

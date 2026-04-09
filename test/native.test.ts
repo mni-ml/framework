@@ -2,7 +2,7 @@ import {
     Tensor, native,
     flashAttention, residualLayerNorm, biasGelu,
 } from '../dist/index.js';
-import { assert, skip, section, summarize } from './helpers.js';
+import { assert, skip, section } from './helpers.js';
 
 // ============================================================
 // FlashAttention / ResidualLayerNorm / BiasGelu (GPU/CUDA only)
@@ -45,4 +45,3 @@ if (typeof native.biasGelu === 'function') {
     skip('biasGelu not available in CPU build');
 }
 
-summarize();

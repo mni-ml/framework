@@ -5,7 +5,7 @@ import {
     Adam, SGD, GradScaler,
     mseLoss,
 } from '../dist/index.js';
-import { assert, assertClose, section, summarize } from './helpers.js';
+import { assert, assertClose, section } from './helpers.js';
 
 // ============================================================
 // Module system
@@ -129,4 +129,3 @@ const finalLoss = mseLoss(finalPred, trainY).toFloat32()[0];
 assert(finalLoss < earlyLoss!, 'training reduces loss');
 assert(finalLoss < 1.0, 'training converges to low loss');
 
-summarize();
