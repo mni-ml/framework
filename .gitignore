@@ -42,3 +42,4 @@ coverage/
 # Temporary files
 tmp/
 temp/
+pnpm-lock.yaml
