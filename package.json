@@ -21,7 +21,7 @@
     "gpu"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.18.0"
   },
   "exports": {
     ".": {
@@ -58,6 +58,6 @@
     "build:native:cuda": "cd src/native && cargo build --release --no-default-features --features cuda && cp target/release/libmni_framework_native.so mni-framework-native.linux-x64-gnu.node",
     "build:native:webgpu": "cd src/native && cargo build --release --no-default-features --features webgpu && cp target/release/libmni_framework_native.dylib mni-framework-native.darwin-arm64.node",
     "build:all": "npm run build:native && npm run build",
-    "test": "node test/ops.test.js"
+    "test": "node --no-warnings --loader ./test/loader.js test/run.ts"
   }
 }

@@ -270,4 +270,4 @@ jobs:
           npx tsc
 
       - name: Run tests
-        run: node test/ops.test.js
+        run: npm test
