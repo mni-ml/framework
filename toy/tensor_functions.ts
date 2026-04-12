@@ -74,6 +74,17 @@ export function cos(a: TensorData): TensorData {
     return out;
 }
 
+function sqrtGradOp(x: number): number {
+    return x > 0 ? 1 / (2 * Math.sqrt(x)) : 0;
+}
+
+export function sqrtGrad(a: TensorData): TensorData {
+    const out = zeros(a.shape);
+    const mapFn = tensorMap(sqrtGradOp);
+    mapFn(out.storage, out.shape, out.strides, a.storage, a.shape, a.strides);
+    return out;
+}
+
 export function sqrt(a: TensorData): TensorData {
     const out = zeros(a.shape);
     const mapFn = tensorMap(operators.sqrt);
@@ -332,14 +343,13 @@ export class Cos extends TensorFunction {
 
 export class Sqrt extends TensorFunction {
     static forward(ctx: TensorContext, a: Tensor): Tensor {
-        const result = new Tensor(sqrt(a.data));
-        ctx.saveForBackward(result);
-        return result;
+        ctx.saveForBackward(a);
+        return new Tensor(sqrt(a.data));
     }
     static backward(ctx: TensorContext, gradOutput: Tensor): Tensor[] {
-        const [result] = ctx.savedTensors;
-        // d/dx sqrt(x) = 1 / (2 * sqrt(x)) = grad / (2 * result)
-        return [gradOutput.mul(result!.mul(Tensor.tensor(2)).inv())];
+        // d/dx sqrt(x) = 1/(2*sqrt(x)) for x > 0, else 0 (clamped region).
+        const [a] = ctx.savedTensors;
+        return [gradOutput.mul(new Tensor(sqrtGrad(a!.data)))];
     }
 }
 
