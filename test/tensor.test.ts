@@ -144,6 +144,18 @@ assertClose(logResult[0], 0.0, 1e-4, 'log(1) = 0');
 assertClose(logResult[1], 1.0, 1e-4, 'log(e) = 1');
 assertClose(logResult[2], 2.0, 1e-4, 'log(e^2) = 2');
 
+const sinInput = Tensor.fromFloat32(new Float32Array([0, Math.PI / 2, Math.PI, -Math.PI / 2]), [4]);
+const sinResult = sinInput.sin().toFloat32();
+assertClose(sinResult[0], 0.0, 1e-5, 'sin(0) = 0');
+assertClose(sinResult[1], 1.0, 1e-5, 'sin(pi/2) = 1');
+assertClose(sinResult[2], 0.0, 1e-5, 'sin(pi) = 0');
+assertClose(sinResult[3], -1.0, 1e-5, 'sin(-pi/2) = -1');
+
+const sinInput2d = Tensor.fromFloat32(new Float32Array([0, Math.PI / 6, Math.PI / 4, Math.PI / 3]), [2, 2]);
+const sinResult2d = sinInput2d.sin().toFloat32();
+assertClose(sinResult2d[1], 0.5, 1e-5, 'sin(pi/6) = 0.5 (2D)');
+assertClose(sinResult2d[2], Math.SQRT1_2, 1e-5, 'sin(pi/4) = sqrt(2)/2 (2D)');
+
 const sigInput = Tensor.fromFloat32(new Float32Array([0, 100, -100]), [3]);
 const sigResult = sigInput.sigmoid().toFloat32();
 assertClose(sigResult[0], 0.5, 1e-4, 'sigmoid(0) = 0.5');

@@ -912,6 +912,85 @@ pub fn log_backward(grad: TensorId, saved: &SavedContext, store: &mut TensorStor
 }
 
 // =========================================================================
+// sin
+// =========================================================================
+
+#[cfg(any(feature = "cpu", feature = "webgpu"))]
+pub fn sin(a: TensorId, store: &mut TensorStore, tape: &mut Tape) -> TensorId {
+    let data: Vec<f32> = store.to_host(a).iter().map(|x| x.sin()).collect();
+    let shape = store.shape(a).to_vec();
+    let out = store.from_vec(data, &shape);
+    tape.record(TapeEntry {
+        op: BackwardOp::Sin, output_id: out, input_ids: smallvec![a],
+        saved: SavedContext::Tensor(a),
+    });
+    out
+}
+
+#[cfg(feature = "cuda")]
+pub fn sin(a: TensorId, store: &mut TensorStore, tape: &mut Tape) -> TensorId {
+    let shape = store.shape(a).to_vec();
+    let n = shape_size(&shape);
+    let out = store.zeros(&shape);
+    let out_ptr = store.dev_ptr(out);
+    let a_ptr = store.dev_ptr(a);
+    let dev = GpuDevice::instance();
+    let func = dev.get_func("sin_f32");
+    unsafe {
+        dev.stream.launch_builder(func)
+            .arg(&out_ptr)
+            .arg(&a_ptr)
+            .arg(&(n as i32))
+            .launch(launch_cfg(n as u32))
+            .unwrap();
+    }
+    tape.record(TapeEntry {
+        op: BackwardOp::Sin, output_id: out, input_ids: smallvec![a],
+        saved: SavedContext::Tensor(a),
+    });
+    out
+}
+
+// =========================================================================
+// sin_backward
+// =========================================================================
+
+#[cfg(any(feature = "cpu", feature = "webgpu"))]
+pub fn sin_backward(grad: TensorId, saved: &SavedContext, store: &mut TensorStore) -> Vec<Option<TensorId>> {
+    if let SavedContext::Tensor(inp) = saved {
+        let inp_data = store.to_host(*inp);
+        let grad_data = store.to_host(grad);
+        let data: Vec<f32> = grad_data.iter().zip(&inp_data).map(|(g, x)| g * x.cos()).collect();
+        let shape = store.shape(grad).to_vec();
+        vec![Some(store.from_vec(data, &shape))]
+    } else { vec![None] }
+}
+
+#[cfg(feature = "cuda")]
+pub fn sin_backward(grad: TensorId, saved: &SavedContext, store: &mut TensorStore) -> Vec<Option<TensorId>> {
+    if let SavedContext::Tensor(inp) = saved {
+        let shape = store.shape(grad).to_vec();
+        let n = shape_size(&shape);
+        let result = store.zeros(&shape);
+        let result_ptr = store.dev_ptr(result);
+        let grad_ptr = store.dev_ptr(grad);
+        let inp_ptr = store.dev_ptr(*inp);
+        let dev = GpuDevice::instance();
+        let func = dev.get_func("sin_backward_f32");
+        unsafe {
+            dev.stream.launch_builder(func)
+                .arg(&result_ptr)
+                .arg(&grad_ptr)
+                .arg(&inp_ptr)
+                .arg(&(n as i32))
+                .launch(launch_cfg(n as u32))
+                .unwrap();
+        }
+        vec![Some(result)]
+    } else { vec![None] }
+}
+
+// =========================================================================
 // div
 // =========================================================================
 

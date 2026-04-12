@@ -226,6 +226,13 @@ pub fn log_op(a: u32) -> u32 {
 }
 
 #[napi]
+pub fn sin_op(a: u32) -> u32 {
+    let mut e = engine().lock();
+    let Engine { store, tape, .. } = &mut *e;
+    ops::elementwise::sin(a as TensorId, store, tape) as u32
+}
+
+#[napi]
 pub fn sum_op(a: u32, dim: i64) -> u32 {
     let mut e = engine().lock();
     let Engine { store, tape, .. } = &mut *e;

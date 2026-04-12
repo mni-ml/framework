@@ -243,6 +243,10 @@ export class Tensor {
         return new Tensor(native.logOp(this._id));
     }
 
+    sin(): Tensor {
+        return new Tensor(native.sinOp(this._id));
+    }
+
     // ---- Activation ----
 
     relu(): Tensor {

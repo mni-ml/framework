@@ -45,3 +45,12 @@ const mmOut = mmX.matmul(mmY).sum();
 mmOut.backward();
 assert(mmX.grad !== null, 'matmul grad exists');
 
+// d/dx sin(x) = cos(x)
+const sinX = Tensor.fromFloat32(new Float32Array([0, Math.PI / 2, Math.PI, Math.PI / 4]), [4]).setRequiresGrad(true);
+sinX.sin().sum().backward();
+const sinGrad = sinX.grad!.toFloat32();
+assertClose(sinGrad[0], 1.0, 1e-4, 'd/dx sin(0) = cos(0) = 1');
+assertClose(sinGrad[1], 0.0, 1e-4, 'd/dx sin(pi/2) = cos(pi/2) = 0');
+assertClose(sinGrad[2], -1.0, 1e-4, 'd/dx sin(pi) = cos(pi) = -1');
+assertClose(sinGrad[3], Math.SQRT1_2, 1e-4, 'd/dx sin(pi/4) = cos(pi/4)');
+

@@ -41,6 +41,18 @@ void log_f32(float* out, const float* a, int n) {
 }
 
 extern "C" __global__
+void sin_f32(float* out, const float* a, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = sinf(a[i]);
+}
+
+extern "C" __global__
+void sin_backward_f32(float* dx, const float* dy, const float* x, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) dx[i] = dy[i] * cosf(x[i]);
+}
+
+extern "C" __global__
 void add_bias_f32(float* out, const float* a, const float* bias, int total, int bias_size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < total) out[i] = a[i] + bias[i % bias_size];

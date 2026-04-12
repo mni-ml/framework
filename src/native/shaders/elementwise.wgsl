@@ -48,6 +48,18 @@ fn log_f32(@builtin(global_invocation_id) gid: vec3u) {
 }
 
 @compute @workgroup_size(256)
+fn sin_f32(@builtin(global_invocation_id) gid: vec3u) {
+    let i = gid.x;
+    if (i < params.n) { out[i] = sin(a[i]); }
+}
+
+@compute @workgroup_size(256)
+fn sin_backward_f32(@builtin(global_invocation_id) gid: vec3u) {
+    let i = gid.x;
+    if (i < params.n) { out[i] = a[i] * cos(b[i]); } // a=grad, b=input
+}
+
+@compute @workgroup_size(256)
 fn div_f32(@builtin(global_invocation_id) gid: vec3u) {
     let i = gid.x;
     if (i < params.n) { out[i] = a[i] / b[i]; }
