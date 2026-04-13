@@ -6,11 +6,18 @@ import * as operators from "./operators.js";
  * Note: inputs is typed as any[] to avoid circular dependency with Scalar
  */
 export class ScalarHistory {
+    lastFn: typeof ScalarFunction | null;
+    ctx: Context | null;
+    inputs: any[];
     constructor(
-        public lastFn: typeof ScalarFunction | null = null,
-        public ctx: Context | null = null,
-        public inputs: any[] = []  // Will be Scalar[] at runtime
-    ) {}
+        lastFn: typeof ScalarFunction | null = null,
+        ctx: Context | null = null,
+        inputs: any[] = []
+    ) {
+        this.lastFn = lastFn;
+        this.ctx = ctx;
+        this.inputs = inputs;
+    }
 }
 
 /**

@@ -6,6 +6,7 @@ const suites = [
     ['test/autograd.test.ts', './autograd.test.js'],
     ['test/module.test.ts', './module.test.js'],
     ['test/native.test.ts', './native.test.js'],
+    ['test/toy.test.ts', './toy.test.js'],
 ] as const;
 
 function formatError(error: unknown): string {

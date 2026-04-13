@@ -100,4 +100,5 @@ export function summarize(): void {
         for (const f of failures) console.log(`  ${red}\u2716${reset} ${f}`);
         process.exit(1);
     }
+    process.exit(0);
 }

@@ -248,11 +248,18 @@ export class TensorContext {
 }
 
 export class TensorHistory {
+    lastFn: typeof TensorFunction | null;
+    ctx: TensorContext | null;
+    inputs: Tensor[];
     constructor (
-        public lastFn: typeof TensorFunction | null = null,
-        public ctx: TensorContext | null = null,
-        public inputs: Tensor[] = []
-    ) {}
+        lastFn: typeof TensorFunction | null = null,
+        ctx: TensorContext | null = null,
+        inputs: Tensor[] = []
+    ) {
+        this.lastFn = lastFn;
+        this.ctx = ctx;
+        this.inputs = inputs;
+    }
 }
 
 export abstract class TensorFunction {
