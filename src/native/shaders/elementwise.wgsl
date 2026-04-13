@@ -82,7 +82,11 @@ fn sqrt_backward_f32(@builtin(global_invocation_id) gid: vec3u) {
     let i = gid.x;
     if (i < params.n) {
         let x = b[i]; // a=grad, b=input
-        out[i] = select(0.0, a[i] * 0.5 / sqrt(x), x > 0.0);
+        if (x > 0.0) {
+            out[i] = a[i] * 0.5 / sqrt(x);
+        } else {
+            out[i] = 0.0;
+        }
     }
 }
 
