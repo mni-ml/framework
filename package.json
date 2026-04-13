@@ -27,6 +27,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./toy": {
+      "types": "./dist/toy/index.d.ts",
+      "import": "./dist/toy/index.js"
     }
   },
   "files": [
@@ -50,10 +54,12 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.9.3"
+    "@webgpu/types": "^0.1.69",
+    "typescript": "^5.9.3",
+    "webgpu": "^0.4.0"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.toy.json",
     "build:native": "cd src/native && cargo build --release --features cpu && cp target/release/libmni_framework_native.dylib mni-framework-native.darwin-arm64.node",
     "build:native:cuda": "cd src/native && cargo build --release --no-default-features --features cuda && cp target/release/libmni_framework_native.so mni-framework-native.linux-x64-gnu.node",
     "build:native:webgpu": "cd src/native && cargo build --release --no-default-features --features webgpu && cp target/release/libmni_framework_native.dylib mni-framework-native.darwin-arm64.node",

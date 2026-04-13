@@ -1,0 +1,11 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "composite": false,
+        "rootDir": "./toy",
+        "outDir": "./dist/toy",
+        "types": ["node", "@webgpu/types"]
+    },
+    "include": ["toy/**/*.ts"],
+    "exclude": ["**/*.test.ts", "dist", "node_modules"]
+}
