@@ -99,9 +99,10 @@ pub fn flash_attention(
     let lse_ptr = store.dev_ptr(lse_id);
 
     let causal_i = if causal { 1i32 } else { 0i32 };
-    let block_size = 32u32;
-    let grid = (bh as u32, (s as u32 + block_size - 1) / block_size, 1);
-    let block = (d.min(32) as u32, block_size, 1);
+    let block_x = d as u32;
+    let block_y = (1024u32 / block_x).min(32);
+    let grid = (bh as u32, (s as u32 + block_y - 1) / block_y, 1);
+    let block = (block_x, block_y, 1);
 
     let func = dev.get_func("flash_attention_forward_f32");
     unsafe {
@@ -222,9 +223,10 @@ pub fn flash_attention_backward(
         let lse_ptr = store.dev_ptr(*lse);
 
         let causal_i = if *causal { 1i32 } else { 0i32 };
-        let block_size = 32u32;
-        let grid = (bh as u32, (*s as u32 + block_size - 1) / block_size, 1);
-        let block = ((*d).min(32) as u32, block_size, 1);
+        let block_x = *d as u32;
+        let block_y = (1024u32 / block_x).min(32);
+        let grid = (bh as u32, (*s as u32 + block_y - 1) / block_y, 1);
+        let block = (block_x, block_y, 1);
 
         let func = dev.get_func("flash_attention_backward_f32");
         unsafe {

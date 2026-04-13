@@ -1,8 +1,6 @@
 // FlashAttention-2 forward + backward CUDA kernels
 // Tiled attention with online softmax, O(S) memory instead of O(S^2).
 
-#define BLOCK_SIZE 32
-
 extern "C" __global__
 void flash_attention_forward_f32(
     float* __restrict__ out,          // [B*H, S, D]
@@ -16,7 +14,7 @@ void flash_attention_forward_f32(
     int causal   // 1 for causal masking
 ) {
     int bh = blockIdx.x;
-    int row = blockIdx.y * BLOCK_SIZE + threadIdx.y;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
     int d = threadIdx.x;
 
     if (row >= S || d >= D) return;
@@ -70,7 +68,7 @@ void flash_attention_backward_f32(
     int causal
 ) {
     int bh = blockIdx.x;
-    int row = blockIdx.y * BLOCK_SIZE + threadIdx.y;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
     int d = threadIdx.x;
 
     if (row >= S || d >= D) return;
