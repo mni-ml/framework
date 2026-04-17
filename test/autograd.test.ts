@@ -45,3 +45,30 @@ const mmOut = mmX.matmul(mmY).sum();
 mmOut.backward();
 assert(mmX.grad !== null, 'matmul grad exists');
 
+// d/dx sin(x) = cos(x)
+const sinX = Tensor.fromFloat32(new Float32Array([0, Math.PI / 2, Math.PI, Math.PI / 4]), [4]).setRequiresGrad(true);
+sinX.sin().sum().backward();
+const sinGrad = sinX.grad!.toFloat32();
+assertClose(sinGrad[0], 1.0, 1e-4, 'd/dx sin(0) = cos(0) = 1');
+assertClose(sinGrad[1], 0.0, 1e-4, 'd/dx sin(pi/2) = cos(pi/2) = 0');
+assertClose(sinGrad[2], -1.0, 1e-4, 'd/dx sin(pi) = cos(pi) = -1');
+assertClose(sinGrad[3], Math.SQRT1_2, 1e-4, 'd/dx sin(pi/4) = cos(pi/4)');
+
+// d/dx cos(x) = -sin(x)
+const cosX = Tensor.fromFloat32(new Float32Array([0, Math.PI / 2, Math.PI, Math.PI / 4]), [4]).setRequiresGrad(true);
+cosX.cos().sum().backward();
+const cosGrad = cosX.grad!.toFloat32();
+assertClose(cosGrad[0], 0.0, 1e-4, 'd/dx cos(0) = -sin(0) = 0');
+assertClose(cosGrad[1], -1.0, 1e-4, 'd/dx cos(pi/2) = -sin(pi/2) = -1');
+assertClose(cosGrad[2], 0.0, 1e-4, 'd/dx cos(pi) = -sin(pi) = 0');
+assertClose(cosGrad[3], -Math.SQRT1_2, 1e-4, 'd/dx cos(pi/4) = -sin(pi/4)');
+
+// d/dx sqrt(x) = 1/(2*sqrt(x)) for x>0, else 0
+const sqrtX = Tensor.fromFloat32(new Float32Array([1, 4, 9, -2]), [4]).setRequiresGrad(true);
+sqrtX.sqrt().sum().backward();
+const sqrtGrad = sqrtX.grad!.toFloat32();
+assertClose(sqrtGrad[0], 0.5, 1e-4, 'd/dx sqrt(1) = 0.5');
+assertClose(sqrtGrad[1], 0.25, 1e-4, 'd/dx sqrt(4) = 0.25');
+assertClose(sqrtGrad[2], 1 / 6, 1e-4, 'd/dx sqrt(9) = 1/6');
+assertClose(sqrtGrad[3], 0.0, 1e-5, 'd/dx sqrt(-2) = 0 (clamped region)');
+

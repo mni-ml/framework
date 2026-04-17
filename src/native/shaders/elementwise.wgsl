@@ -48,6 +48,49 @@ fn log_f32(@builtin(global_invocation_id) gid: vec3u) {
 }
 
 @compute @workgroup_size(256)
+fn sin_f32(@builtin(global_invocation_id) gid: vec3u) {
+    let i = gid.x;
+    if (i < params.n) { out[i] = sin(a[i]); }
+}
+
+@compute @workgroup_size(256)
+fn sin_backward_f32(@builtin(global_invocation_id) gid: vec3u) {
+    let i = gid.x;
+    if (i < params.n) { out[i] = a[i] * cos(b[i]); } // a=grad, b=input
+}
+
+@compute @workgroup_size(256)
+fn cos_f32(@builtin(global_invocation_id) gid: vec3u) {
+    let i = gid.x;
+    if (i < params.n) { out[i] = cos(a[i]); }
+}
+
+@compute @workgroup_size(256)
+fn cos_backward_f32(@builtin(global_invocation_id) gid: vec3u) {
+    let i = gid.x;
+    if (i < params.n) { out[i] = -a[i] * sin(b[i]); } // a=grad, b=input
+}
+
+@compute @workgroup_size(256)
+fn sqrt_f32(@builtin(global_invocation_id) gid: vec3u) {
+    let i = gid.x;
+    if (i < params.n) { out[i] = sqrt(max(a[i], 0.0)); }
+}
+
+@compute @workgroup_size(256)
+fn sqrt_backward_f32(@builtin(global_invocation_id) gid: vec3u) {
+    let i = gid.x;
+    if (i < params.n) {
+        let x = b[i]; // a=grad, b=input
+        if (x > 0.0) {
+            out[i] = a[i] * 0.5 / sqrt(x);
+        } else {
+            out[i] = 0.0;
+        }
+    }
+}
+
+@compute @workgroup_size(256)
 fn div_f32(@builtin(global_invocation_id) gid: vec3u) {
     let i = gid.x;
     if (i < params.n) { out[i] = a[i] / b[i]; }

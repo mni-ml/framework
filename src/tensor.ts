@@ -131,6 +131,18 @@ export class Tensor {
         return new Tensor(native.logOp(this._id));
     }
 
+    sin(): Tensor {
+        return new Tensor(native.sinOp(this._id));
+    }
+
+    cos(): Tensor {
+        return new Tensor(native.cosOp(this._id));
+    }
+
+    sqrt(): Tensor {
+        return new Tensor(native.sqrtOp(this._id));
+    }
+
     // ---- Activation ----
 
     relu(): Tensor {
