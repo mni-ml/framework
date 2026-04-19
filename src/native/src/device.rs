@@ -185,6 +185,15 @@ impl GpuDevice {
             include_str!("../kernels/mixed_precision.cu"),
             &["f32_to_bf16", "bf16_to_f32", "scale_f32", "check_inf_nan_f32"],
         );
+        self.compile_and_load(
+            "kv_quant",
+            include_str!("../kernels/kv_quant.cu"),
+            &[
+                "compute_rowwise_scale_f32",
+                "quantize_rowwise_i8_f32",
+                "dequantize_rowwise_i8_f32",
+            ],
+        );
     }
 
     pub fn get_func(&self, name: &str) -> &CudaFunction {

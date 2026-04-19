@@ -8,16 +8,20 @@ mod utils;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use parking_lot::Mutex;
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use crate::autograd::Tape;
 use crate::ops::data::IntStore;
+use crate::ops::kv_cache::{KvCache, KvCacheConfig};
 use crate::tensor::{TensorId, TensorStore};
 
 struct Engine {
     store: TensorStore,
     tape: Tape,
     int_store: IntStore,
+    kv_caches: HashMap<u32, KvCache>,
+    next_kv_cache_id: u32,
 }
 
 static ENGINE: OnceLock<Mutex<Engine>> = OnceLock::new();
@@ -28,6 +32,8 @@ fn engine() -> &'static Mutex<Engine> {
             store: TensorStore::new(),
             tape: Tape::new(),
             int_store: IntStore::new(),
+            kv_caches: HashMap::new(),
+            next_kv_cache_id: 1,
         })
     })
 }
@@ -457,6 +463,8 @@ pub fn reset_engine() {
     eng.store = TensorStore::new();
     eng.tape = Tape::new();
     eng.int_store = IntStore::new();
+    eng.kv_caches.clear();
+    eng.next_kv_cache_id = 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -573,6 +581,79 @@ pub fn flash_attention(q: u32, k: u32, v: u32, scale: f64, causal: bool) -> u32 
         q as TensorId, k as TensorId, v as TensorId,
         scale as f32, causal, store, tape,
     ) as u32
+}
+
+
+#[napi]
+pub fn kv_cache_create(
+    batch_size: i64,
+    num_heads: i64,
+    head_dim: i64,
+    max_seq_len: i64,
+    quantized: bool,
+) -> u32 {
+    let cfg = KvCacheConfig {
+        batch_size: batch_size as usize,
+        num_heads: num_heads as usize,
+        head_dim: head_dim as usize,
+        max_seq_len: max_seq_len as usize,
+        quantized,
+    };
+    let mut eng = engine().lock();
+    let cache_id = eng.next_kv_cache_id;
+    eng.next_kv_cache_id += 1;
+    eng.kv_caches.insert(cache_id, KvCache::new(cfg));
+    cache_id
+}
+
+#[napi]
+pub fn kv_cache_len(cache_id: u32) -> i64 {
+    let eng = engine().lock();
+    eng.kv_caches
+        .get(&cache_id)
+        .map(|c| c.len() as i64)
+        .unwrap_or(0)
+}
+
+#[napi]
+pub fn kv_cache_quantized(cache_id: u32) -> bool {
+    let eng = engine().lock();
+    eng.kv_caches
+        .get(&cache_id)
+        .map(|c| c.quantized())
+        .unwrap_or(false)
+}
+
+#[napi]
+pub fn kv_cache_reset(cache_id: u32) {
+    let mut eng = engine().lock();
+    if let Some(cache) = eng.kv_caches.get_mut(&cache_id) {
+        cache.reset();
+    }
+}
+
+#[napi]
+pub fn kv_cache_free(cache_id: u32) {
+    let mut eng = engine().lock();
+    eng.kv_caches.remove(&cache_id);
+}
+
+#[napi]
+pub fn kv_cache_decode_step(cache_id: u32, q: u32, k: u32, v: u32, scale: f64) -> u32 {
+    let mut eng = engine().lock();
+    let Engine { store, kv_caches, .. } = &mut *eng;
+    let cache = kv_caches
+        .get_mut(&cache_id)
+        .unwrap_or_else(|| panic!("invalid kv cache id: {}", cache_id));
+    cache
+        .append_and_decode(
+            q as TensorId,
+            k as TensorId,
+            v as TensorId,
+            scale as f32,
+            store,
+        )
+        .unwrap_or_else(|e| panic!("kv cache decode failed: {e}")) as u32
 }
 
 #[cfg(feature = "cuda")]

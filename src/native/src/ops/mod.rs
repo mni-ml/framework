@@ -6,6 +6,7 @@ pub mod dropout;
 pub mod elementwise;
 pub mod embedding;
 pub mod fused;
+pub mod kv_cache;
 pub mod layout;
 pub mod loss;
 pub mod matmul;
