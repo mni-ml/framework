@@ -656,6 +656,22 @@ pub fn kv_cache_decode_step(cache_id: u32, q: u32, k: u32, v: u32, scale: f64) -
         .unwrap_or_else(|e| panic!("kv cache decode failed: {e}")) as u32
 }
 
+#[napi]
+pub fn kv_cache_append(cache_id: u32, k: u32, v: u32) {
+    let mut eng = engine().lock();
+    let Engine { store, kv_caches, .. } = &mut *eng;
+    let cache = kv_caches
+        .get_mut(&cache_id)
+        .unwrap_or_else(|| panic!("invalid kv cache id: {}", cache_id));
+    cache
+        .append(
+            k as TensorId,
+            v as TensorId,
+            store,
+        )
+        .unwrap_or_else(|e| panic!("kv cache append failed: {e}"));
+}
+
 #[cfg(feature = "cuda")]
 #[napi]
 pub fn cross_entropy_loss_gpu(logits: u32, int_buf_id: u32) -> u32 {

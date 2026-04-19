@@ -125,6 +125,10 @@ export class KvCache {
         return new Tensor(id);
     }
 
+    append(k: Tensor, v: Tensor): void {
+        native.kvCacheAppend(this.cacheId, k._id, v._id);
+    }
+
     length(): number {
         return Number(native.kvCacheLen(this.cacheId));
     }

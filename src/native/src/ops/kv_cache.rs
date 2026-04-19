@@ -80,33 +80,16 @@ impl KvCache {
         self.val_scales.fill(1.0);
     }
 
-    pub fn append_and_decode(
-        &mut self,
-        q: TensorId,
-        k: TensorId,
-        v: TensorId,
-        scale: f32,
-        store: &mut TensorStore,
-    ) -> Result<TensorId, String> {
-        if self.len >= self.cfg.max_seq_len {
-            return Err(format!(
-                "kv cache is full (len={}, max_seq_len={})",
-                self.len, self.cfg.max_seq_len
-            ));
-        }
-
-        let q_shape = store.shape(q).to_vec();
-        let k_shape = store.shape(k).to_vec();
-        let v_shape = store.shape(v).to_vec();
-        if q_shape != k_shape || q_shape != v_shape {
-            return Err("q/k/v shapes must match for kv cache decode".to_string());
-        }
-
-        let (batch_size, num_heads, seq_len, head_dim) = parse_bhsd(&q_shape)?;
+    fn validate_single_step_shape(
+        &self,
+        shape: &[usize],
+        op_name: &str,
+    ) -> Result<(usize, usize, usize, usize), String> {
+        let (batch_size, num_heads, seq_len, head_dim) = parse_bhsd(shape)?;
         if seq_len != 1 {
             return Err(format!(
-                "kv cache decode expects seq_len=1, got {}",
-                seq_len
+                "kv cache {} expects seq_len=1, got {}",
+                op_name, seq_len
             ));
         }
         if batch_size != self.cfg.batch_size
@@ -114,7 +97,8 @@ impl KvCache {
             || head_dim != self.cfg.head_dim
         {
             return Err(format!(
-                "kv cache decode shape mismatch: expected [B={}, H={}, S=1, D={}], got [B={}, H={}, S=1, D={}]",
+                "kv cache {} shape mismatch: expected [B={}, H={}, S=1, D={}], got [B={}, H={}, S=1, D={}]",
+                op_name,
                 self.cfg.batch_size,
                 self.cfg.num_heads,
                 self.cfg.head_dim,
@@ -123,11 +107,24 @@ impl KvCache {
                 head_dim
             ));
         }
+        Ok((batch_size, num_heads, seq_len, head_dim))
+    }
 
-        let bh = self.cfg.batch_heads();
-        let d = self.cfg.head_dim;
+    fn append_inner(
+        &mut self,
+        k: TensorId,
+        v: TensorId,
+        bh: usize,
+        d: usize,
+        store: &mut TensorStore,
+    ) -> Result<(), String> {
+        if self.len >= self.cfg.max_seq_len {
+            return Err(format!(
+                "kv cache is full (len={}, max_seq_len={})",
+                self.len, self.cfg.max_seq_len
+            ));
+        }
         let pos = self.len;
-
         if self.cfg.quantized {
             #[cfg(feature = "cuda")]
             {
@@ -169,8 +166,39 @@ impl KvCache {
                 self.vals_fp32[dst..dst + d].copy_from_slice(&v_data[src..src + d]);
             }
         }
-
         self.len += 1;
+        Ok(())
+    }
+
+    pub fn append(&mut self, k: TensorId, v: TensorId, store: &mut TensorStore) -> Result<(), String> {
+        let k_shape = store.shape(k).to_vec();
+        let v_shape = store.shape(v).to_vec();
+        if k_shape != v_shape {
+            return Err("k/v shapes must match for kv cache append".to_string());
+        }
+        let (_, _, _, head_dim) = self.validate_single_step_shape(&k_shape, "append")?;
+        self.append_inner(k, v, self.cfg.batch_heads(), head_dim, store)
+    }
+
+    pub fn append_and_decode(
+        &mut self,
+        q: TensorId,
+        k: TensorId,
+        v: TensorId,
+        scale: f32,
+        store: &mut TensorStore,
+    ) -> Result<TensorId, String> {
+        let q_shape = store.shape(q).to_vec();
+        let k_shape = store.shape(k).to_vec();
+        let v_shape = store.shape(v).to_vec();
+        if q_shape != k_shape || q_shape != v_shape {
+            return Err("q/k/v shapes must match for kv cache decode".to_string());
+        }
+
+        let (_, _, _, head_dim) = self.validate_single_step_shape(&q_shape, "decode")?;
+        let bh = self.cfg.batch_heads();
+        let d = head_dim;
+        self.append_inner(k, v, bh, d, store)?;
         let cur_len = self.len;
 
         let q_data = flatten_single_step(store.to_host(q), bh, d)?;
