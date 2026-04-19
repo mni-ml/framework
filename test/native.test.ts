@@ -59,6 +59,24 @@ if (typeof native.kvCacheCreate === 'function') {
     const qCache = new KvCache(batch, heads, headDim, maxSeq, true);
     assert(qCache.isQuantized() || typeof native.flashAttention !== 'function', 'quantized cache enabled or safely downgraded');
 
+    const expectThrow = (fn: () => void, msg: string): void => {
+        let threw = false;
+        try {
+            fn();
+        } catch {
+            threw = true;
+        }
+        assert(threw, msg);
+    };
+
+    const appendCache = new KvCache(batch, heads, headDim, maxSeq, false);
+    appendCache.append(
+        Tensor.rand([batch, heads, 1, headDim]),
+        Tensor.rand([batch, heads, 1, headDim]),
+    );
+    assert(appendCache.length() === 1, 'append increases kv cache length');
+    appendCache.free();
+
     let maxAbsDiff = 0.0;
     let totalDecodeMs = 0.0;
     for (let t = 0; t < steps; t++) {
@@ -76,6 +94,7 @@ if (typeof native.kvCacheCreate === 'function') {
         for (let i = 0; i < a.length; i++) {
             maxAbsDiff = Math.max(maxAbsDiff, Math.abs(a[i] - b[i]));
         }
+        assert(a.length === batch * heads * headDim, 'dequantized decode path returns expected output size');
     }
 
     assert(fpCache.length() === steps, 'fp32 kv cache length tracks decode steps');
@@ -90,10 +109,46 @@ if (typeof native.kvCacheCreate === 'function') {
     const int8Bytes = batch * heads * maxSeq * headDim * 2 * 1 + batch * heads * maxSeq * 2 * 4;
     assert(int8Bytes < fp32Bytes, 'quantized cache theoretical memory footprint is lower than fp32');
 
+    const badSeq = new KvCache(batch, heads, headDim, maxSeq, false);
+    expectThrow(() => {
+        const q = Tensor.rand([batch, heads, 2, headDim]);
+        const k = Tensor.rand([batch, heads, 2, headDim]);
+        const v = Tensor.rand([batch, heads, 2, headDim]);
+        badSeq.decodeStep(q, k, v, scale);
+    }, 'decode step rejects seq_len != 1');
+    badSeq.free();
+
+    const badShape = new KvCache(batch, heads, headDim, maxSeq, false);
+    expectThrow(() => {
+        const q = Tensor.rand([batch, heads, 1, headDim]);
+        const k = Tensor.rand([batch, heads, 1, headDim + 1]);
+        const v = Tensor.rand([batch, heads, 1, headDim + 1]);
+        badShape.decodeStep(q, k, v, scale);
+    }, 'decode step rejects q/k/v shape mismatch');
+    badShape.free();
+
+    const overflow = new KvCache(batch, heads, headDim, 2, false);
+    overflow.append(Tensor.rand([batch, heads, 1, headDim]), Tensor.rand([batch, heads, 1, headDim]));
+    overflow.append(Tensor.rand([batch, heads, 1, headDim]), Tensor.rand([batch, heads, 1, headDim]));
+    expectThrow(() => {
+        overflow.append(Tensor.rand([batch, heads, 1, headDim]), Tensor.rand([batch, heads, 1, headDim]));
+    }, 'append rejects capacity overflow');
+    overflow.free();
+
     fpCache.reset();
     assert(fpCache.length() === 0, 'kv cache reset clears logical length');
     fpCache.free();
     qCache.free();
+
+    expectThrow(() => {
+        fpCache.length();
+        fpCache.decodeStep(
+            Tensor.rand([batch, heads, 1, headDim]),
+            Tensor.rand([batch, heads, 1, headDim]),
+            Tensor.rand([batch, heads, 1, headDim]),
+            scale,
+        );
+    }, 'free invalidates kv cache handle');
 } else {
     skip('kv cache APIs not available in current native build');
 }
