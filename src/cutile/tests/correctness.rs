@@ -284,6 +284,71 @@ fn test_reduce_sum_all() {
 }
 
 #[test]
+fn test_reduce_sum_all_multipass() {
+    // 1M elements => with BLOCK=256 this is 3 passes (1M -> 4K -> 16 -> 1),
+    // exercising the ping-pong between partial buffers.
+    let mut s = TensorStore::new();
+    let n = 1 << 20;
+    // Small values so the fp32 sum doesn't explode.
+    let a: Vec<f32> = (0..n).map(|i| ((i % 17) as f32) * 0.01).collect();
+    let ida = s.from_slice(&a, &[n]);
+    let ids = reduce::sum_all(&mut s, ida);
+    let got = s.to_host(ids);
+    let want: f32 = a.iter().copied().sum();
+    assert_eq!(s.shape(ids), &[1]);
+    // 1e-3 rel tolerance is generous for a 1M-elt fp32 reduction.  The GPU
+    // tree reduction and the CPU serial sum will disagree in the last few
+    // bits; the tree answer is usually more accurate but we just want "same
+    // ballpark."
+    let rel = (got[0] - want).abs() / want.abs().max(1.0);
+    assert!(
+        rel < 1e-3,
+        "sum_all multipass: got={} want={} rel={}",
+        got[0],
+        want,
+        rel
+    );
+}
+
+#[test]
+fn test_reduce_sum_all_host_tail() {
+    // 510 = 2 * 3 * 5 * 17 — BLOCK=2 reduces to 255, which has no divisor
+    // in {256,128,...,2}, so the tail finishes on the host.
+    let mut s = TensorStore::new();
+    let n = 510;
+    let a = make_ramp(n, 0.1);
+    let ida = s.from_slice(&a, &[n]);
+    let ids = reduce::sum_all(&mut s, ida);
+    let got = s.to_host(ids);
+    let want: f32 = a.iter().copied().sum();
+    assert_eq!(s.shape(ids), &[1]);
+    assert!(
+        approx_eq(got[0], want, 1e-3),
+        "sum_all host tail: got={} want={}",
+        got[0],
+        want
+    );
+}
+
+#[test]
+fn test_reduce_mean_all() {
+    let mut s = TensorStore::new();
+    let n = 2048;
+    let a = make_ramp(n, 0.25);
+    let ida = s.from_slice(&a, &[16, 128]);
+    let idm = reduce::mean_all(&mut s, ida);
+    let got = s.to_host(idm);
+    let want: f32 = a.iter().copied().sum::<f32>() / n as f32;
+    assert_eq!(s.shape(idm), &[1]);
+    assert!(
+        approx_eq(got[0], want, 1e-3),
+        "mean_all: got={} want={}",
+        got[0],
+        want
+    );
+}
+
+#[test]
 fn test_shape_and_free() {
     let mut s = TensorStore::new();
     let id = s.zeros(&[2, 3, 4]);

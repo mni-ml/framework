@@ -26,11 +26,16 @@ Kernels (`src/kernels.rs`, in a `#[cutile::module]`):
 | `saxpy`          | Fused `z = a·x + y` (2 GMEM reads, 1 GMEM write) |
 | `relu`           | `max(0, x)` via `max_tile`     |
 | `relu_backward`  | `grad where x > 0 else 0` via `gt_tile` + `select` |
+| `sum_block`      | Per-block `reduce_sum(tile)` writing one scalar per pid; driven iteratively from the host for CUB-style N-pass global reduction |
 | `gemm`           | 2D tiled with `mma` accumulation, const generics `<BM, BN, BK, K>` |
 
-Host-side fallbacks (`src/ops/reduce.rs`): `sum_all`, `mean_all` (copy to
-CPU, sum, copy back).  Promoted to cuTile reduce kernels would be
-straightforward; see `cutile-examples/softmax.rs` for the pattern.
+Global reductions (`src/ops/reduce.rs`): `sum_all`, `mean_all` are the
+classic CUB two-pass (really N-pass) reduction driven by `sum_block`.
+Each pass reduces by a factor of `BLOCK ∈ {256, 128, 64, …, 2}` picked to
+divide the current size; if a prime tail remains (e.g. size 255), that
+tail finishes on the host — simpler than padding with zeros and doesn't
+affect correctness.  A Thrust/CUB C-API call would replace both paths
+cleanly if we ever bind it.
 
 TensorStore (`src/tensor.rs`): ID-keyed storage mirroring the main CUDA
 backend — `zeros`, `ones`, `from_slice`, `rand`, `randn`, `to_host`, `free`,
@@ -94,7 +99,7 @@ Rust-level correctness tests compare cuTile output against a CPU reference
 
 ```bash
 cargo test --release --test correctness -- --test-threads=1
-# 16 passed; 0 failed
+# 19 passed; 0 failed
 ```
 
 N-API smoke tests drive the backend through the Node.js loader:
@@ -144,6 +149,19 @@ A production GEMM would need shared-memory staging, larger tiles, double
 buffering, etc. — out of scope for this backend, which aims to prove the
 wiring rather than push peak throughput.
 
+### `sum_all` (global reduction, N-pass)
+
+| N           | cuTile   | CPU      | cuTile vs CPU |
+|-------------|----------|----------|---------------|
+| 16 384      | 53 µs    | 15 µs    | CPU wins (launch overhead) |
+| 1 048 576   | 79 µs    | 976 µs   | **12× cuTile** |
+| 4 194 304   | 92 µs    | 4.2 ms   | **46× cuTile** |
+
+The per-pass `sum_block` kernel uses cuTile's built-in `reduce_sum` tile
+op for the in-block reduction, and the driver re-launches with the
+partials array until one element remains.  Crossover vs the CPU sum is
+~64K elements on L40S.
+
 Reproduce:
 
 ```bash
@@ -170,9 +188,11 @@ cargo bench --bench kernels -- --quick
   shapes (64/128/256/...) all fit.  Non-divisible shapes are rejected at the
   op-wrapper level by the divisor walk rather than producing garbage via
   cuTile's zero-padded partitions.
-- **Reductions as host fallbacks.**  `sum_all` / `mean_all` D2H → sum → H2D,
-  which is slow but correct.  Real usage would want `reduce_sum(tile, dim)`
-  kernels per rank (see `cutile-examples/softmax.rs`).
+- **Reductions via N-pass `sum_block`.**  `sum_all` / `mean_all` use a
+  per-block `reduce_sum` tile op iterated by the host until one element
+  remains.  BLOCK is picked per pass to divide the current size; an
+  indivisible prime tail (e.g. a size-255 intermediate) drops to a host
+  sum instead of padding, to keep the kernel path simple.
 
 ## Files
 
@@ -185,7 +205,7 @@ src/
 │   ├── elementwise.rs  # add / sub / mul / div / neg / mul_scalar / saxpy
 │   ├── activation.rs   # relu / relu_backward
 │   ├── matmul.rs       # GEMM with BM/BN/BK picker + generics
-│   └── reduce.rs       # sum_all / mean_all (host fallback)
+│   └── reduce.rs       # sum_all / mean_all (N-pass sum_block driver)
 └── lib.rs       # pub modules + napi exports (feature-gated)
 
 tests/correctness.rs      # 16 cross-checks vs CPU reference

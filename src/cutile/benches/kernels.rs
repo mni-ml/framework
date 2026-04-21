@@ -6,7 +6,7 @@
 //! familiar reference point.  Each bench does a warm-up pass before timing.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use mni_framework_cutile::ops::{elementwise, matmul};
+use mni_framework_cutile::ops::{elementwise, matmul, reduce};
 use mni_framework_cutile::tensor::TensorStore;
 use std::hint::black_box;
 
@@ -145,5 +145,35 @@ fn bench_matmul(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_add, bench_saxpy, bench_matmul);
+fn bench_sum_all(c: &mut Criterion) {
+    let mut group = c.benchmark_group("sum_all");
+    for &n in &[1 << 14usize, 1 << 20, 1 << 22] {
+        let a: Vec<f32> = (0..n).map(|i| ((i % 17) as f32) * 0.01).collect();
+        group.throughput(Throughput::Elements(n as u64));
+
+        {
+            let mut store = TensorStore::new();
+            let ia = store.from_slice(&a, &[n]);
+            let warm = reduce::sum_all(&mut store, ia);
+            store.free(warm);
+            group.bench_with_input(BenchmarkId::new("cutile", n), &n, |bch, _| {
+                bch.iter(|| {
+                    let id = reduce::sum_all(&mut store, ia);
+                    black_box(id);
+                    store.free(id);
+                });
+            });
+        }
+
+        group.bench_with_input(BenchmarkId::new("cpu", n), &n, |bch, _| {
+            bch.iter(|| {
+                let s: f32 = black_box(&a).iter().copied().sum();
+                black_box(s)
+            });
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_add, bench_saxpy, bench_matmul, bench_sum_all);
 criterion_main!(benches);

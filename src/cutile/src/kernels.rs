@@ -114,6 +114,27 @@ pub mod kernels {
         dx.store(select(pos, tg, zero));
     }
 
+    // ===== Reductions =====
+    //
+    // Classic two-pass reduction: each block reduces a BLOCK-sized chunk of
+    // the input down to one scalar (pass 1), and the driver re-launches the
+    // same kernel on the resulting partials array until a single element
+    // remains (pass 2..N).  The per-block reduction uses cuTile's built-in
+    // `reduce_sum` tile op rather than hand-rolled shared-memory code.
+
+    #[cutile::entry()]
+    pub fn sum_block<const BLOCK: i32>(
+        z: &mut Tensor<f32, { [1] }>,
+        x: &Tensor<f32, { [-1] }>,
+    ) {
+        let pid: (i32, i32, i32) = get_tile_block_id();
+        let part_x: Partition<f32, { [BLOCK] }> = x.partition(const_shape![BLOCK]);
+        let tile_x: Tile<f32, { [BLOCK] }> = part_x.load([pid.0]);
+        let s_scalar: Tile<f32, { [] }> = reduce_sum(tile_x, 0i32);
+        let s_one: Tile<f32, { [1] }> = s_scalar.reshape(const_shape![1]);
+        z.store(s_one);
+    }
+
     // ===== GEMM =====
     //
     // z [M, N] = x [M, K] @ y [K, N], tiled BM×BN with reduction over BK.
