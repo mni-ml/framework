@@ -63,6 +63,7 @@
     "build:native": "cd src/native && cargo build --release --features cpu && cp target/release/libmni_framework_native.dylib mni-framework-native.darwin-arm64.node",
     "build:native:cuda": "cd src/native && cargo build --release --no-default-features --features cuda && cp target/release/libmni_framework_native.so mni-framework-native.linux-x64-gnu.node",
     "build:native:webgpu": "cd src/native && cargo build --release --no-default-features --features webgpu && cp target/release/libmni_framework_native.dylib mni-framework-native.darwin-arm64.node",
+    "build:native:cutile": "cd src/cutile && cargo build --release --features napi && cp target/release/libmni_framework_cutile.so mni-framework-cutile.linux-x64-gnu.node",
     "build:all": "npm run build:native && npm run build",
     "test": "node --no-warnings --loader ./test/loader.js test/run.ts"
   }

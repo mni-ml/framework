@@ -9,6 +9,7 @@ out/
 # Native addon binaries (built by CI or locally)
 *.node
 src/native/target/
+src/cutile/target/
 
 # TypeScript cache
 *.tsbuildinfo

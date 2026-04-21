@@ -1,0 +1,3 @@
+[env]
+CUDA_TOOLKIT_PATH = { value = "/usr/local/cuda-13.2", relative = false }
+BINDGEN_EXTRA_CLANG_ARGS = "-I/usr/lib/llvm-14/lib/clang/14.0.0/include"
