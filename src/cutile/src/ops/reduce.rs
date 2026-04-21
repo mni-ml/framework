@@ -1,17 +1,21 @@
-//! Global reductions implemented as a classic CUB-style two-pass (really
-//! N-pass) reduction on top of cuTile.
+//! Global reductions implemented as a CUB-style strict two-pass reduction
+//! on top of cuTile.
 //!
-//! Each pass runs `kernels::sum_block::<BLOCK>`, which reduces a BLOCK-sized
-//! chunk of its input down to one scalar written to the corresponding slot
-//! of a `partials` buffer.  We ping-pong partials back into the kernel until
-//! one element remains.  BLOCK is a const generic picked per-pass so the
-//! largest candidate from `CANDIDATE_BLOCKS` that divides the current size
-//! wins; if the remainder ever becomes indivisible by any of those (e.g. a
-//! stray prime factor), we finish the tail on the host so correctness
-//! doesn't depend on power-of-two inputs.
+//! Pass 1 (multi-block): launches `sum_block::<PASS1_BLOCK>` with a grid of
+//! `ceil(n / PASS1_BLOCK)` blocks.  Each block does an in-tile `reduce_sum`
+//! and writes one scalar into a partials buffer — O(n) → O(n / PASS1_BLOCK).
 //!
-//! Ideally the tail would either pad with the reduction identity or call a
-//! Thrust/CUB C-API binding; that's not in scope here.
+//! Pass 2 (single block): launches the same `sum_block` kernel with grid = 1
+//! and a BLOCK const large enough to cover all of pass 1's partials.  One
+//! block does an in-tile `reduce_sum` over the whole partials buffer and
+//! writes the final scalar — O(tiles) → 1.
+//!
+//! The last block in pass 1 and the sole block in pass 2 are the usual
+//! "partial tile" case: when `n` (resp. `nblocks1`) is not a multiple of
+//! the tile size, `Tensor::partition()` returns a **zero-padded** view
+//! (`make_partition_view_padded(.., "zero", ..)` in cuTile), so out-of-range
+//! tile lanes load 0.0f32 — the identity for sum — and the reduction result
+//! is unaffected.  No host tail, no divisibility constraints on n.
 
 use crate::device::runtime;
 use crate::kernels;
@@ -19,20 +23,31 @@ use crate::tensor::{shape_size, TensorId, TensorStore};
 use cuda_async::device_operation::DeviceOp;
 use cutile::api;
 use cutile::tensor::{PartitionMut, Reshape, Tensor};
-use cutile::tile_kernel::{TileKernel, ToHostVecOp};
+use cutile::tile_kernel::TileKernel;
 
-const CANDIDATE_BLOCKS: [usize; 9] = [256, 128, 64, 32, 16, 8, 4, 2, 1];
+/// Elements-per-block in pass 1.  Pass 1 launches `ceil(n / PASS1_BLOCK)`
+/// blocks, each of which reduces a `PASS1_BLOCK`-sized tile to one scalar.
+/// With `PASS1_BLOCK = 2048` and a pass-2 tile cap of 4096, this handles
+/// inputs up to ~8M elements in strictly two passes; above that we'd need
+/// to either bump `PASS1_BLOCK` (larger tiles cost shared memory) or extend
+/// `FINAL_BLOCKS`.
+const PASS1_BLOCK: usize = 2048;
 
-/// Largest block size from `CANDIDATE_BLOCKS` (strictly > 1) that divides `n`.
-/// Returns `None` if no non-trivial divisor exists (i.e. further reduction
-/// needs a host fallback).
-fn pick_reduce_block(n: usize) -> Option<usize> {
-    for &b in &CANDIDATE_BLOCKS {
-        if b >= 2 && b <= n && n % b == 0 {
-            return Some(b);
+/// Candidate pass-2 tile sizes (powers of 2).  Pass 2 is a single-block
+/// launch with BLOCK = the smallest candidate ≥ pass-1's partials count.
+/// Zero-padded loads cover the slack when `nblocks1` isn't a power of 2.
+const FINAL_BLOCKS: [usize; 12] = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096];
+
+fn pick_final_block(n: usize) -> usize {
+    for &b in &FINAL_BLOCKS {
+        if b >= n {
+            return b;
         }
     }
-    None
+    panic!(
+        "reduce size {n} exceeds max pass-2 tile {}",
+        FINAL_BLOCKS[FINAL_BLOCKS.len() - 1]
+    )
 }
 
 /// Sum over all elements.  Returns a new scalar tensor with shape `[1]`.
@@ -40,56 +55,66 @@ pub fn sum_all(store: &mut TensorStore, a: TensorId) -> TensorId {
     let n = shape_size(&store.shape(a).to_vec());
     let rt = runtime();
 
-    if n <= 1 {
-        // Degenerate: just copy through as a 1-element tensor.
+    if n == 0 {
+        return store.from_slice(&[0.0f32], &[1]);
+    }
+    if n == 1 {
         let host = store.to_host(a);
-        let total: f32 = host.iter().copied().sum();
-        return store.from_slice(&[total], &[1]);
+        return store.from_slice(&host, &[1]);
     }
 
-    // Seed the pipeline with an owned 1D copy of the input so we can ping-pong
-    // partials independent of the store.
-    let mut current: Tensor<f32> = store
+    // Flatten the input to 1D; this also detaches it from the store so the
+    // kernel driver owns its own buffer.
+    let input_1d: Tensor<f32> = store
         .tensor(a)
         .dup()
         .sync_on(&rt.stream)
         .expect("dup input")
         .reshape(&[n])
         .expect("reshape input to 1D");
-    let mut size = n;
 
-    while size > 1 {
-        let block = match pick_reduce_block(size) {
-            Some(b) => b,
-            None => {
-                // Indivisible tail — finish on the host.
-                let host = current
-                    .dup()
-                    .to_host_vec()
-                    .sync_on(&rt.stream)
-                    .expect("d2h tail");
-                let total: f32 = host.iter().copied().sum();
-                return store.from_slice(&[total], &[1]);
-            }
-        };
-        let nblocks = size / block;
-        let mut partials = api::zeros::<f32>(&[nblocks])
-            .sync_on(&rt.stream)
-            .expect("alloc partials");
-        {
-            let xv = current.view(&[size]).expect("view current");
-            let _ = kernels::sum_block((&mut partials).partition([1]), &xv)
-                .generics(vec![block.to_string()])
-                .sync_on(&rt.stream)
-                .expect("sum_block kernel");
-        }
-        current = partials;
-        size = nblocks;
+    let max_final = *FINAL_BLOCKS.last().unwrap();
+
+    // Small inputs fit in a single pass — one block, zero-padded tile.
+    if n <= max_final {
+        return launch_final_reduce(store, &input_1d, n);
     }
 
-    // size == 1; reshape to the framework's scalar convention.
-    let one = current.reshape(&[1]).expect("reshape to [1]");
-    store.insert_tensor(one, vec![1])
+    // Pass 1: n -> nblocks1.  `ceil(n / PASS1_BLOCK)` blocks, each writes
+    // one partial.  Last block's tile is zero-padded for a non-divisible n.
+    let nblocks1 = n.div_ceil(PASS1_BLOCK);
+    let mut partials = api::zeros::<f32>(&[nblocks1])
+        .sync_on(&rt.stream)
+        .expect("alloc partials");
+    {
+        let xv = input_1d.view(&[n]).expect("view input");
+        let _ = kernels::sum_block((&mut partials).partition([1]), &xv)
+            .generics(vec![PASS1_BLOCK.to_string()])
+            .sync_on(&rt.stream)
+            .expect("sum_block pass 1");
+    }
+
+    // Pass 2: single-block reduction of the partials to one scalar.
+    launch_final_reduce(store, &partials, nblocks1)
+}
+
+/// Launch `sum_block` with grid = 1 on the given 1D tensor of length `len`,
+/// picking a tile size that covers `len` (zero-padding any slack).  Returns
+/// a new scalar tensor of shape `[1]` registered in the store.
+fn launch_final_reduce(store: &mut TensorStore, src: &Tensor<f32>, len: usize) -> TensorId {
+    let rt = runtime();
+    let block = pick_final_block(len);
+    let mut result = api::zeros::<f32>(&[1])
+        .sync_on(&rt.stream)
+        .expect("alloc result");
+    {
+        let sv = src.view(&[len]).expect("view src");
+        let _ = kernels::sum_block((&mut result).partition([1]), &sv)
+            .generics(vec![block.to_string()])
+            .sync_on(&rt.stream)
+            .expect("sum_block final");
+    }
+    store.insert_tensor(result, vec![1])
 }
 
 /// Mean over all elements.  Returns a new scalar tensor with shape `[1]`.

@@ -26,16 +26,21 @@ Kernels (`src/kernels.rs`, in a `#[cutile::module]`):
 | `saxpy`          | Fused `z = a·x + y` (2 GMEM reads, 1 GMEM write) |
 | `relu`           | `max(0, x)` via `max_tile`     |
 | `relu_backward`  | `grad where x > 0 else 0` via `gt_tile` + `select` |
-| `sum_block`      | Per-block `reduce_sum(tile)` writing one scalar per pid; driven iteratively from the host for CUB-style N-pass global reduction |
+| `sum_block`      | Per-block `reduce_sum(tile)` writing one scalar per pid; drives both passes of the CUB-style two-pass global reduction |
 | `gemm`           | 2D tiled with `mma` accumulation, const generics `<BM, BN, BK, K>` |
 
-Global reductions (`src/ops/reduce.rs`): `sum_all`, `mean_all` are the
-classic CUB two-pass (really N-pass) reduction driven by `sum_block`.
-Each pass reduces by a factor of `BLOCK ∈ {256, 128, 64, …, 2}` picked to
-divide the current size; if a prime tail remains (e.g. size 255), that
-tail finishes on the host — simpler than padding with zeros and doesn't
-affect correctness.  A Thrust/CUB C-API call would replace both paths
-cleanly if we ever bind it.
+Global reductions (`src/ops/reduce.rs`): `sum_all`, `mean_all` are a
+strict CUB-style two-pass reduction driven by `sum_block`.  Pass 1 is a
+multi-block launch that reduces `n` elements down to
+`ceil(n / PASS1_BLOCK)` partials (one per block); pass 2 is a single-block
+launch that reduces those partials to a single scalar.  When `n` is not a
+multiple of `PASS1_BLOCK` — or when the pass-2 tile is wider than the
+partials count — the out-of-range tile lanes are zero-padded automatically
+by `Tensor::partition()` (`make_partition_view_padded(.., "zero", ..)` in
+cuTile).  Zero is the additive identity, so the reduction result is
+unaffected.  No host tail, no divisibility constraint on `n`.  Small
+inputs (`n ≤ 4096`) skip pass 1 and go straight to a single zero-padded
+pass-2 kernel.
 
 TensorStore (`src/tensor.rs`): ID-keyed storage mirroring the main CUDA
 backend — `zeros`, `ones`, `from_slice`, `rand`, `randn`, `to_host`, `free`,
@@ -99,7 +104,7 @@ Rust-level correctness tests compare cuTile output against a CPU reference
 
 ```bash
 cargo test --release --test correctness -- --test-threads=1
-# 19 passed; 0 failed
+# 20 passed; 0 failed
 ```
 
 N-API smoke tests drive the backend through the Node.js loader:
@@ -149,18 +154,20 @@ A production GEMM would need shared-memory staging, larger tiles, double
 buffering, etc. — out of scope for this backend, which aims to prove the
 wiring rather than push peak throughput.
 
-### `sum_all` (global reduction, N-pass)
+### `sum_all` (global reduction, strict 2-pass)
 
 | N           | cuTile   | CPU      | cuTile vs CPU |
 |-------------|----------|----------|---------------|
 | 16 384      | 53 µs    | 15 µs    | CPU wins (launch overhead) |
-| 1 048 576   | 79 µs    | 976 µs   | **12× cuTile** |
-| 4 194 304   | 92 µs    | 4.2 ms   | **46× cuTile** |
+| 1 048 576   | 57 µs    | 976 µs   | **17× cuTile** |
+| 4 194 304   | 64 µs    | 3.94 ms  | **61× cuTile** |
 
-The per-pass `sum_block` kernel uses cuTile's built-in `reduce_sum` tile
-op for the in-block reduction, and the driver re-launches with the
-partials array until one element remains.  Crossover vs the CPU sum is
-~64K elements on L40S.
+Pass 1 is a multi-block `sum_block::<2048>` launch that reduces `n` →
+`ceil(n/2048)` partials; pass 2 is a single-block `sum_block` launch whose
+tile size is the smallest power of 2 ≥ the partials count.  The in-block
+reduction uses cuTile's built-in `reduce_sum` tile op; trailing lanes in
+the last-block/pass-2 tile load 0.0 via the zero-padded partition.
+Crossover vs the CPU sum is ~64K elements on L40S.
 
 Reproduce:
 
@@ -188,11 +195,13 @@ cargo bench --bench kernels -- --quick
   shapes (64/128/256/...) all fit.  Non-divisible shapes are rejected at the
   op-wrapper level by the divisor walk rather than producing garbage via
   cuTile's zero-padded partitions.
-- **Reductions via N-pass `sum_block`.**  `sum_all` / `mean_all` use a
-  per-block `reduce_sum` tile op iterated by the host until one element
-  remains.  BLOCK is picked per pass to divide the current size; an
-  indivisible prime tail (e.g. a size-255 intermediate) drops to a host
-  sum instead of padding, to keep the kernel path simple.
+- **Strict two-pass reductions.**  `sum_all` / `mean_all` are exactly two
+  `sum_block` launches: multi-block (O(n) → O(n / PASS1_BLOCK)) then
+  single-block (O(tiles) → 1).  The last block in pass 1 and the sole
+  block in pass 2 are the usual "partial tile" case — `Tensor::partition()`
+  returns a zero-padded view, so out-of-range lanes load the sum identity
+  and the reduction stays correct for arbitrary `n`.  No host tail, no
+  divisibility requirement, no recursion.
 
 ## Files
 

@@ -284,9 +284,9 @@ fn test_reduce_sum_all() {
 }
 
 #[test]
-fn test_reduce_sum_all_multipass() {
-    // 1M elements => with BLOCK=256 this is 3 passes (1M -> 4K -> 16 -> 1),
-    // exercising the ping-pong between partial buffers.
+fn test_reduce_sum_all_large() {
+    // 1M elements exercises the two-pass path: pass 1 reduces 1M -> 1K
+    // partials with PASS1_BLOCK=1024, pass 2 single-block-reduces 1K -> 1.
     let mut s = TensorStore::new();
     let n = 1 << 20;
     // Small values so the fp32 sum doesn't explode.
@@ -303,7 +303,7 @@ fn test_reduce_sum_all_multipass() {
     let rel = (got[0] - want).abs() / want.abs().max(1.0);
     assert!(
         rel < 1e-3,
-        "sum_all multipass: got={} want={} rel={}",
+        "sum_all large: got={} want={} rel={}",
         got[0],
         want,
         rel
@@ -311,9 +311,11 @@ fn test_reduce_sum_all_multipass() {
 }
 
 #[test]
-fn test_reduce_sum_all_host_tail() {
-    // 510 = 2 * 3 * 5 * 17 — BLOCK=2 reduces to 255, which has no divisor
-    // in {256,128,...,2}, so the tail finishes on the host.
+fn test_reduce_sum_all_partial_tile() {
+    // 510 is not a power of 2 and not a multiple of any pass-1 block.  The
+    // strict 2-pass driver uses cuTile's zero-padded partition so the
+    // trailing lanes in the tile load 0.0 (the sum identity) — no host
+    // fallback, no divisibility constraint.
     let mut s = TensorStore::new();
     let n = 510;
     let a = make_ramp(n, 0.1);
@@ -324,9 +326,32 @@ fn test_reduce_sum_all_host_tail() {
     assert_eq!(s.shape(ids), &[1]);
     assert!(
         approx_eq(got[0], want, 1e-3),
-        "sum_all host tail: got={} want={}",
+        "sum_all partial tile: got={} want={}",
         got[0],
         want
+    );
+}
+
+#[test]
+fn test_reduce_sum_all_partial_pass2() {
+    // 2049 elements: pass 1 produces nblocks1 = ceil(2049/1024) = 3 partials.
+    // Pass 2 launches with BLOCK=4 (smallest power of 2 ≥ 3) so lane 3 of the
+    // final tile zero-pads.  Checks that partial tiles on BOTH passes are OK.
+    let mut s = TensorStore::new();
+    let n = 2049;
+    let a = make_ramp(n, 0.1);
+    let ida = s.from_slice(&a, &[n]);
+    let ids = reduce::sum_all(&mut s, ida);
+    let got = s.to_host(ids);
+    let want: f32 = a.iter().copied().sum();
+    assert_eq!(s.shape(ids), &[1]);
+    let rel = (got[0] - want).abs() / want.abs().max(1.0);
+    assert!(
+        rel < 1e-3,
+        "sum_all partial pass2: got={} want={} rel={}",
+        got[0],
+        want,
+        rel
     );
 }
 
