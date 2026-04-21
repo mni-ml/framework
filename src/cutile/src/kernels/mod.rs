@@ -13,11 +13,19 @@
 //! reductions and GEMM use rank-specific const generics.
 
 pub mod activation;
+pub mod adamw;
+pub mod dropout;
 pub mod elementwise;
+pub mod grad_util;
 pub mod matmul;
+pub mod mixed_precision;
 pub mod reduce;
 
 pub use activation::*;
+pub use adamw::*;
+pub use dropout::*;
 pub use elementwise::*;
+pub use grad_util::*;
 pub use matmul::*;
+pub use mixed_precision::*;
 pub use reduce::*;
