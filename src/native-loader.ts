@@ -108,3 +108,41 @@ export function loadNative(): any {
         `@mni-ml/framework: native addon not found for ${platform}-${arch}.${hint}`
     );
 }
+
+/**
+ * Load the experimental cuTile Rust backend.
+ *
+ * This backend is a sibling of the default native addon — it is built from
+ * `src/cutile` and exposes only a subset of the framework surface
+ * (elementwise, activations, matmul, and plain tensor creation).  It is
+ * intended for benchmarking and proof-of-concept work against NVIDIA's
+ * cuTile Rust DSL, not as a drop-in replacement for `loadNative()`.
+ *
+ * Returns the raw N-API module so callers can opt-in op by op.
+ */
+export function loadCutile(): any {
+    const require = createRequire(import.meta.url);
+    const platform = process.platform;
+    const arch = process.arch;
+    const key = `${platform}-${arch}`;
+    const suffixes = getLocalSuffixes()[key] ?? [key];
+    const ext = platform === 'win32' ? 'dll' : platform === 'darwin' ? 'dylib' : 'so';
+
+    const candidates_file: string[] = [];
+    for (const suffix of suffixes) {
+        candidates_file.push(
+            join(__dirname_f, '..', 'src', 'cutile', `mni-framework-cutile.${suffix}.node`),
+        );
+    }
+    candidates_file.push(
+        join(__dirname_f, '..', 'src', 'cutile', 'target', 'release', `libmni_framework_cutile.${ext}`),
+    );
+    for (const p of candidates_file) {
+        if (existsSync(p)) {
+            return require(p);
+        }
+    }
+    throw new Error(
+        `@mni-ml/framework: cuTile addon not found for ${platform}-${arch}.\n  Build from source: cd src/cutile && cargo build --release --features napi`,
+    );
+}

@@ -1,0 +1,47 @@
+[package]
+name = "mni-framework-cutile"
+version = "0.1.0"
+edition = "2021"
+description = "cuTile Rust backend for @mni-ml/framework"
+
+[lib]
+name = "mni_framework_cutile"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+# napi feature enables Node.js N-API bindings; omit it to build a plain rlib
+# for Rust-level tests and benchmarks.
+napi = ["dep:napi", "dep:napi-derive", "dep:napi-build"]
+
+[dependencies]
+cutile = { path = "../../../cutile-rs/cutile" }
+cutile-compiler = { path = "../../../cutile-rs/cutile-compiler" }
+cuda-core = { path = "../../../cutile-rs/cuda-core" }
+cuda-async = { path = "../../../cutile-rs/cuda-async" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+parking_lot = "0.12"
+rand = "0.8"
+rand_distr = "0.4"
+smallvec = "1.13"
+napi = { version = "2", features = ["napi8"], optional = true }
+napi-derive = { version = "2", optional = true }
+
+[build-dependencies]
+napi-build = { version = "2", optional = true }
+
+[dev-dependencies]
+criterion = "0.5"
+approx = "0.5"
+
+[[bench]]
+name = "kernels"
+harness = false
+
+[profile.release]
+lto = true
+opt-level = 3
+
+[profile.bench]
+opt-level = 3
+lto = true
