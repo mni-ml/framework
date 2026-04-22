@@ -282,10 +282,111 @@ pub mod elementwise_kernels {
         let ty2: Tile<f32, { [BN, C] }> = ty.reshape(const_shape![1, C]).broadcast(const_shape![BN, C]);
         z.store(tx * ty2);
     }
+
+    /// Generic up-to-4D permute via runtime stride arithmetic — port of
+    /// `permute_f32` in the CUDA backend.  Per output element:
+    ///
+    /// ```text
+    ///   rem = i
+    ///   src_i = 0
+    ///   for axis ∈ 0..ndim:
+    ///       c = rem / ds[axis]
+    ///       rem = rem % ds[axis]
+    ///       src_i += c * es[axis]
+    ///   out[i] = src[src_i]
+    /// ```
+    ///
+    /// `ds[a]` is the dest-side "block divisor" for axis `a` (so that
+    /// splitting `i` by successive divisors recovers the permuted
+    /// output coordinates), and `es[a]` is the source-side flat stride
+    /// for the source axis that maps to the dest's `a`-th axis.
+    ///
+    /// The `ndim >= k` branches are on a runtime `i32`, but all
+    /// divisors / strides for unused levels are passed as zero so the
+    /// unused branches produce no effect — matching the CUDA version's
+    /// pattern of unused `ds_i`/`es_i` parameters.  We keep the
+    /// branches explicit (rather than folding all four unconditionally)
+    /// so unused levels don't generate division-by-zero lanes.
+    #[cutile::entry()]
+    pub unsafe fn permute<const BLOCK: i32>(
+        out_ptr: *mut f32,
+        src_ptr: *mut f32,
+        n: i32,
+        ds0: i32,
+        ds1: i32,
+        ds2: i32,
+        _ds3: i32,
+        es0: i32,
+        es1: i32,
+        es2: i32,
+        es3: i32,
+        ndim: i32,
+    ) {
+        let pid: (i32, i32, i32) = get_tile_block_id();
+        let base: i32 = pid.0 * BLOCK;
+        let base_t: Tile<i32, { [BLOCK] }> = base.broadcast(const_shape![BLOCK]);
+        let iota_t: Tile<i32, { [BLOCK] }> = iota(const_shape![BLOCK]);
+        let idx: Tile<i32, { [BLOCK] }> = base_t + iota_t;
+
+        let n_t: Tile<i32, { [BLOCK] }> = n.broadcast(const_shape![BLOCK]);
+        let valid: Tile<bool, { [BLOCK] }> = lt_tile(idx, n_t);
+
+        let mut rem: Tile<i32, { [BLOCK] }> = idx;
+        let mut src_idx: Tile<i32, { [BLOCK] }> = constant(0i32, const_shape![BLOCK]);
+
+        if ndim >= 1i32 {
+            let ds0_t: Tile<i32, { [BLOCK] }> = ds0.broadcast(const_shape![BLOCK]);
+            let es0_t: Tile<i32, { [BLOCK] }> = es0.broadcast(const_shape![BLOCK]);
+            let c: Tile<i32, { [BLOCK] }> = rem / ds0_t;
+            rem = rem % ds0_t;
+            src_idx = src_idx + c * es0_t;
+        }
+        if ndim >= 2i32 {
+            let ds1_t: Tile<i32, { [BLOCK] }> = ds1.broadcast(const_shape![BLOCK]);
+            let es1_t: Tile<i32, { [BLOCK] }> = es1.broadcast(const_shape![BLOCK]);
+            let c: Tile<i32, { [BLOCK] }> = rem / ds1_t;
+            rem = rem % ds1_t;
+            src_idx = src_idx + c * es1_t;
+        }
+        if ndim >= 3i32 {
+            let ds2_t: Tile<i32, { [BLOCK] }> = ds2.broadcast(const_shape![BLOCK]);
+            let es2_t: Tile<i32, { [BLOCK] }> = es2.broadcast(const_shape![BLOCK]);
+            let c: Tile<i32, { [BLOCK] }> = rem / ds2_t;
+            rem = rem % ds2_t;
+            src_idx = src_idx + c * es2_t;
+        }
+        if ndim >= 4i32 {
+            let es3_t: Tile<i32, { [BLOCK] }> = es3.broadcast(const_shape![BLOCK]);
+            src_idx = src_idx + rem * es3_t;
+        }
+
+        let src_base: PointerTile<*mut f32, { [] }> = pointer_to_tile(src_ptr);
+        let src_base_bl: PointerTile<*mut f32, { [BLOCK] }> = src_base
+            .reshape(const_shape![1])
+            .broadcast(const_shape![BLOCK]);
+        let src_ptrs: PointerTile<*mut f32, { [BLOCK] }> = src_base_bl.offset_tile(src_idx);
+        let (src_vals, _ltok): (Tile<f32, { [BLOCK] }>, Token) = load_ptr_tko(
+            src_ptrs,
+            "relaxed",
+            "device",
+            Some(valid),
+            Some(0.0f32),
+            None,
+            None,
+        );
+
+        let out_base: PointerTile<*mut f32, { [] }> = pointer_to_tile(out_ptr);
+        let out_base_bl: PointerTile<*mut f32, { [BLOCK] }> = out_base
+            .reshape(const_shape![1])
+            .broadcast(const_shape![BLOCK]);
+        let out_ptrs: PointerTile<*mut f32, { [BLOCK] }> = out_base_bl.offset_tile(idx);
+        let _stok: Token =
+            store_ptr_tko(out_ptrs, src_vals, "relaxed", "device", Some(valid), None, None);
+    }
 }
 
 pub use elementwise_kernels::{
     add, add_bias, broadcast_add, broadcast_mul, copy, div, div_backward_a, div_backward_b, eq,
-    exp_f32, fill, gt, is_close, log_f32, lt, mul, mul_scalar, neg, pow_backward_f32, pow_f32,
-    saxpy, sub,
+    exp_f32, fill, gt, is_close, log_f32, lt, mul, mul_scalar, neg, permute, pow_backward_f32,
+    pow_f32, saxpy, sub,
 };
