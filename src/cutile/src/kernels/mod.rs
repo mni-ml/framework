@@ -14,6 +14,7 @@
 
 pub mod activation;
 pub mod adamw;
+pub mod conv;
 pub mod cross_entropy;
 pub mod data;
 pub mod dropout;
@@ -31,6 +32,7 @@ pub mod softmax;
 
 pub use activation::*;
 pub use adamw::*;
+pub use conv::*;
 pub use cross_entropy::*;
 pub use data::*;
 pub use dropout::*;
