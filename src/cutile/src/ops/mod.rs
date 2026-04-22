@@ -5,6 +5,7 @@
 //! allocated result tensor.
 
 pub mod activation;
+pub mod attention;
 pub mod conv;
 pub mod dropout;
 pub mod elementwise;
